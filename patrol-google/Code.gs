@@ -21,6 +21,7 @@ function sheet_(){
  const headers=sheet.getRange(1,1,1,HEADERS_.length).getValues()[0].map(v=>String(v).replace(/\s+/g,' ').trim());
  if(!HEADERS_.every((v,i)=>headers[i]===v))throw new Error('หัวตาราง DATA ไม่ตรงกับระบบ ห้ามเขียนทับข้อมูล กรุณาติดต่อผู้ดูแล');
  ensureWorkPhotoColumns_(sheet);
+ ensureInspectionPhotoColumns_(sheet);
  return sheet;
 }
 function ensureWorkPhotoColumns_(sheet){
@@ -32,6 +33,19 @@ function ensureWorkPhotoColumns_(sheet){
   if(sheet.getLastRow()>1){const values=sheet.getRange(2,45,sheet.getLastRow()-1,2).getValues();if(values.some(row=>row.some((v,i)=>!String(header[i]).trim()&&v!==''&&v!==null&&v!==undefined)))throw new Error('AS/AT มีข้อมูลแต่ไม่มีหัวตาราง กรุณาตรวจสอบก่อน');}
   range.setValues([names]);
  }
+}
+function ensureInspectionPhotoColumns_(sheet){
+ const max=sheet.getMaxColumns();if(max<48)sheet.insertColumnsAfter(max,48-max);
+ const range=sheet.getRange(1,47,1,2),header=range.getValues()[0];
+ const names=['ดูรูปตรวจรับ 1','ดูรูปตรวจรับ 2'];
+ if(header.some((v,i)=>String(v).trim()!==''&&String(v).trim()!==names[i]))throw new Error('คอลัมน์ AU/AV มีหัวตารางอื่นอยู่ ระบบจะไม่เขียนทับ');
+ if(header.some(v=>String(v).trim()==='')){
+  if(sheet.getLastRow()>1){const values=sheet.getRange(2,47,sheet.getLastRow()-1,2).getValues();if(values.some(row=>row.some((v,i)=>!String(header[i]).trim()&&v!==''&&v!==null&&v!==undefined)))throw new Error('AU/AV มีข้อมูลแต่ไม่มีหัวตาราง กรุณาตรวจสอบก่อน');}
+  range.setValues([names]);
+ }
+}
+function setInspectionPhotoLinks_(sheet,row,photo1,photo2){
+ sheet.getRange(row,47,1,2).setValues([[photo1,photo2]]);
 }
 function setWorkPhotoLinks_(sheet,row,photo1,photo2){
  sheet.getRange(row,45,1,2).setValues([[photo1,photo2]]);
@@ -216,7 +230,7 @@ function saveInspection(input,requestId){
   const duplicate=previous.find(row=>String(row[7])===requestId);
   if(duplicate){
    if(String(duplicate[0])!==input.recordId||String(duplicate[3])!==email||String(duplicate[8])!==fingerprint)throw new Error('รหัสคำขอเดิมมีข้อมูลเปลี่ยน');
-   const latest=previous.filter(row=>String(row[0])===input.recordId).pop();data.getRange(index+2,14).setValue(String(latest[9]));SpreadsheetApp.flush();return {id:input.recordId,submittedAt:String(latest[4]),submittedBy:String(latest[3]),photo1:String(latest[5]),photo2:String(latest[6]),verdict:String(latest[9])};
+   const latest=previous.filter(row=>String(row[0])===input.recordId).pop();setInspectionPhotoLinks_(data,index+2,String(latest[5]),String(latest[6]));data.getRange(index+2,14).setValue(String(latest[9]));SpreadsheetApp.flush();return {id:input.recordId,submittedAt:String(latest[4]),submittedBy:String(latest[3]),photo1:String(latest[5]),photo2:String(latest[6]),verdict:String(latest[9])};
   }
   const folderId=PropertiesService.getScriptProperties().getProperty('PHOTO_FOLDER_ID');if(!folderId)throw new Error('ผู้ดูแลต้องตั้ง PHOTO_FOLDER_ID และแชร์โฟลเดอร์ให้ช่างผู้ควบคุมงาน');
   const folder=DriveApp.getFolderById(folderId),urls=[];
@@ -230,8 +244,40 @@ function saveInspection(input,requestId){
   const range=sheet.getRange(sheet.getLastRow()+1,1,1,INSPECT_HEADERS_.length);range.setNumberFormat('@');range.setValues([values.map(safe)]);
   // Keep files after the durable delivery row; a retry recovers a failed DATA status update.
   created.length=0;
-  data.getRange(index+2,14).setValue(input.verdict);SpreadsheetApp.flush();
+  setInspectionPhotoLinks_(data,index+2,urls[0],urls[1]);data.getRange(index+2,14).setValue(input.verdict);SpreadsheetApp.flush();
   return {id:work.id,submittedAt:now,photo1:urls[0],photo2:urls[1],submittedBy:email,verdict:input.verdict};
  }catch(e){created.forEach(file=>{try{file.setTrashed(true)}catch(ignore){}});throw e;}
  finally{lock.releaseLock();}
+}
+
+function syncInspectionPhotos(){
+ user_();const lock=LockService.getScriptLock();lock.waitLock(30000);
+ try{
+  const data=sheet_(),deliveries=inspectionMap_();let updated=0,conflicts=0;
+  if(data.getLastRow()>1){
+   const rows=data.getRange(2,1,data.getLastRow()-1,48).getValues();
+   const counts=new Map();rows.forEach(row=>counts.set(String(row[0]),(counts.get(String(row[0]))||0)+1));
+   rows.forEach((row,i)=>{
+    const id=String(row[0]),delivery=deliveries.get(id);if(!delivery)return;
+    const target=[delivery.photo1,delivery.photo2],current=[row[46]||'',row[47]||''];
+    if(counts.get(id)!==1||current.some((url,j)=>url&&url!==target[j])){conflicts++;return;}
+    if(current.some((url,j)=>url!==target[j])){setInspectionPhotoLinks_(data,i+2,...target);updated++;}
+   });
+  }
+  SpreadsheetApp.flush();const result={updated,conflicts};console.log(JSON.stringify(result));return result;
+ }finally{lock.releaseLock();}
+}
+
+
+// Resolve only photo links recorded for this work; never accept arbitrary Drive IDs.
+function getWorkPhoto(recordId,kind,index){
+ user_();if(typeof recordId!=='string'||!['delivery','inspection'].includes(kind)||![1,2].includes(index))throw new Error('คำขอรูปไม่ถูกต้อง');
+ const item=(kind==='delivery'?deliveryMap_():inspectionMap_()).get(recordId);
+ if(!item)throw new Error('ไม่พบรูปของงานนี้');
+ const url=item[index===1?'photo1':'photo2'];
+ const match=/^https:\/\/drive\.google\.com\/file\/d\/([A-Za-z0-9_-]+)(?:\/|$)/.exec(url);
+ if(!match)throw new Error('ลิงก์รูปไม่ถูกต้อง');
+ const blob=DriveApp.getFileById(match[1]).getBlob(),bytes=blob.getBytes();
+ if(blob.getContentType()!=='image/jpeg'||bytes.length>2100000)throw new Error('ไม่สามารถแสดงรูปนี้ในเว็บ กรุณาเปิดลิงก์ Drive');
+ return 'data:image/jpeg;base64,'+Utilities.base64Encode(bytes);
 }
