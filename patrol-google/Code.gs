@@ -67,7 +67,7 @@ function readRow_(row){
 }
 function listPatrol(){
  user_();const lock=LockService.getScriptLock();lock.waitLock(30000);
- try{const sheet=sheet_();if(sheet.getLastRow()<2)return [];const deliveries=deliveryMap_();return sheet.getRange(2,1,sheet.getLastRow()-1,HEADERS_.length).getValues().filter(row=>row.some(v=>v!==''&&v!==null)).map(readRow_).map(r=>{const delivery=deliveries.get(r.id);return Object.assign(r,{delivery:delivery||null});}).reverse();}
+ try{const sheet=sheet_();if(sheet.getLastRow()<2)return [];const deliveries=deliveryMap_(),inspections=inspectionMap_();return sheet.getRange(2,1,sheet.getLastRow()-1,HEADERS_.length).getValues().filter(row=>row.some(v=>v!==''&&v!==null)).map(readRow_).map(r=>{const delivery=deliveries.get(r.id);return Object.assign(r,{delivery:delivery||null,inspection:inspections.get(r.id)||null});}).reverse();}
  finally{lock.releaseLock();}
 }
 function photoName_(pea,key,requestId){
@@ -141,7 +141,7 @@ function completeContractorWork(input,requestId){
   const duplicate=previous.find(row=>String(row[7])===requestId);
   if(duplicate){
    if(String(duplicate[0])!==input.recordId||String(duplicate[3])!==email||String(duplicate[8])!==fingerprint)throw new Error('รหัสคำขอเดิมมีข้อมูลเปลี่ยน');
-   setWorkPhotoLinks_(data,index+2,String(duplicate[5]),String(duplicate[6]));data.getRange(index+2,14).setValue('ส่งมอบงาน');SpreadsheetApp.flush();return {id:input.recordId,submittedAt:String(duplicate[4]),photo1:String(duplicate[5]),photo2:String(duplicate[6])};
+   setWorkPhotoLinks_(data,index+2,String(duplicate[5]),String(duplicate[6]));data.getRange(index+2,14).setValue((inspectionMap_().get(input.recordId)||{}).verdict||'ส่งมอบงาน');SpreadsheetApp.flush();return {id:input.recordId,submittedAt:String(duplicate[4]),photo1:String(duplicate[5]),photo2:String(duplicate[6])};
   }
   if(previous.some(row=>String(row[0])===input.recordId))throw new Error('งานนี้ส่งมอบแล้ว กรุณาโหลดข้อมูลล่าสุด');
   const folderId=PropertiesService.getScriptProperties().getProperty('PHOTO_FOLDER_ID');if(!folderId)throw new Error('ผู้ดูแลต้องตั้ง PHOTO_FOLDER_ID และแชร์โฟลเดอร์ให้ผู้รับจ้าง');
@@ -156,7 +156,7 @@ function completeContractorWork(input,requestId){
   const range=sheet.getRange(sheet.getLastRow()+1,1,1,WORK_HEADERS_.length);range.setNumberFormat('@');range.setValues([values.map(safe)]);
   // Keep files after the durable delivery row; a retry recovers a failed DATA status update.
   created.length=0;
-  setWorkPhotoLinks_(data,index+2,urls[0],urls[1]);data.getRange(index+2,14).setValue('ส่งมอบงาน');SpreadsheetApp.flush();
+  setWorkPhotoLinks_(data,index+2,urls[0],urls[1]);data.getRange(index+2,14).setValue((inspectionMap_().get(input.recordId)||{}).verdict||'ส่งมอบงาน');SpreadsheetApp.flush();
   return {id:work.id,submittedAt:now,photo1:urls[0],photo2:urls[1]};
  }catch(e){created.forEach(file=>{try{file.setTrashed(true)}catch(ignore){}});throw e;}
  finally{lock.releaseLock();}
@@ -179,4 +179,59 @@ function syncContractorPhotos(){
   }
   SpreadsheetApp.flush();const result={updated,conflicts};console.log(JSON.stringify(result));return result;
  }finally{lock.releaseLock();}
+}
+
+const INSPECT_HEADERS_=['Record ID','WBS','PEA.','ผู้ตรวจ','ตรวจเมื่อ','รูปตรวจรับ 1','รูปตรวจรับ 2','รหัสคำขอ','Fingerprint','ผลตรวจ'];
+function inspectionSheet_(create){
+ const book=SpreadsheetApp.openById(SPREADSHEET_ID_);let sheet=book.getSheetByName('InspectorReviews');
+ if(!sheet&&create){sheet=book.insertSheet('InspectorReviews');sheet.getRange(1,1,1,INSPECT_HEADERS_.length).setValues([INSPECT_HEADERS_]);sheet.setFrozenRows(1);}
+ if(!sheet)return null;
+ const header=sheet.getRange(1,1,1,INSPECT_HEADERS_.length).getValues()[0];
+ if(!INSPECT_HEADERS_.every((h,i)=>h===String(header[i]).trim()))throw new Error('หัวตาราง InspectorReviews ไม่ตรงกับระบบ');
+ return sheet;
+}
+function inspectionMap_(){
+ const sheet=inspectionSheet_(false),map=new Map();
+ if(sheet&&sheet.getLastRow()>1)sheet.getRange(2,1,sheet.getLastRow()-1,INSPECT_HEADERS_.length).getValues().forEach(row=>{
+  if(row[0]&&row[5]&&row[6]&&['ผ่าน','ไม่ผ่าน'].includes(String(row[9])))map.set(String(row[0]),{submittedAt:row[4] instanceof Date?row[4].toISOString():String(row[4]),submittedBy:String(row[3]),photo1:String(row[5]),photo2:String(row[6]),verdict:String(row[9])});
+ });
+ return map;
+}
+function saveInspection(input,requestId){
+ const email=user_();
+ if(!input||!['ผ่าน','ไม่ผ่าน'].includes(input.verdict))throw new Error('ผลตรวจไม่ถูกต้อง');
+ if(!input||typeof input!=='object'||typeof input.recordId!=='string'||!input.recordId||input.recordId.length>100)throw new Error('งานไม่ถูกต้อง');
+ if(typeof requestId!=='string'||!/^[a-zA-Z0-9-]{16,80}$/.test(requestId))throw new Error('รหัสคำขอไม่ถูกต้อง');
+ const photos=photos_({before:input.photo1,after:input.photo2});
+ if(!photos.before||!photos.after)throw new Error('กรุณาแนบรูปตรวจรับงานให้ครบ 2 รูป');
+ const fingerprint=Utilities.base64Encode(Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256,JSON.stringify([input.recordId,photos,input.verdict])));
+ const lock=LockService.getScriptLock();lock.waitLock(30000);const created=[];
+ try{
+  const data=sheet_(),rows=data.getLastRow()>1?data.getRange(2,1,data.getLastRow()-1,HEADERS_.length).getValues():[];
+  const index=rows.findIndex(row=>String(row[0])===input.recordId);
+  if(index<0)throw new Error('ไม่พบงานสำรวจใน DATA กรุณาโหลดข้อมูลใหม่');
+  if(rows.filter(row=>String(row[0])===input.recordId).length!==1)throw new Error('Record ID ซ้ำใน DATA กรุณาให้ผู้ดูแลตรวจสอบ');
+  const work=readRow_(rows[index]);if(!work.wbs.trim()||!work.pea.trim())throw new Error('งานนี้ไม่มี WBS หรือ PEA กรุณาให้ผู้สำรวจเติมข้อมูลก่อน');
+  const sheet=inspectionSheet_(true),previous=sheet.getLastRow()>1?sheet.getRange(2,1,sheet.getLastRow()-1,INSPECT_HEADERS_.length).getValues():[];
+  const duplicate=previous.find(row=>String(row[7])===requestId);
+  if(duplicate){
+   if(String(duplicate[0])!==input.recordId||String(duplicate[3])!==email||String(duplicate[8])!==fingerprint)throw new Error('รหัสคำขอเดิมมีข้อมูลเปลี่ยน');
+   const latest=previous.filter(row=>String(row[0])===input.recordId).pop();data.getRange(index+2,14).setValue(String(latest[9]));SpreadsheetApp.flush();return {id:input.recordId,submittedAt:String(latest[4]),submittedBy:String(latest[3]),photo1:String(latest[5]),photo2:String(latest[6]),verdict:String(latest[9])};
+  }
+  const folderId=PropertiesService.getScriptProperties().getProperty('PHOTO_FOLDER_ID');if(!folderId)throw new Error('ผู้ดูแลต้องตั้ง PHOTO_FOLDER_ID และแชร์โฟลเดอร์ให้ช่างผู้ควบคุมงาน');
+  const folder=DriveApp.getFolderById(folderId),urls=[];
+  const label=work.pea.replace(/[\\/:*?"<>|\x00-\x1f\x7f]/g,'_').slice(0,100);
+  [photos.before,photos.after].forEach((image,i)=>{
+   const blob=Utilities.newBlob(Utilities.base64Decode(image.split(',')[1]),'image/jpeg',label+'_ตรวจรับ'+(i+1)+'_'+requestId+'.jpg');
+   const file=folder.createFile(blob);created.push(file);urls.push(file.getUrl());
+  });
+  const now=new Date().toISOString(),safe=v=>/^[=+\-@]/.test(String(v))?"'"+v:String(v);
+  const values=[work.id,work.wbs,work.pea,email,now,urls[0],urls[1],requestId,fingerprint,input.verdict];
+  const range=sheet.getRange(sheet.getLastRow()+1,1,1,INSPECT_HEADERS_.length);range.setNumberFormat('@');range.setValues([values.map(safe)]);
+  // Keep files after the durable delivery row; a retry recovers a failed DATA status update.
+  created.length=0;
+  data.getRange(index+2,14).setValue(input.verdict);SpreadsheetApp.flush();
+  return {id:work.id,submittedAt:now,photo1:urls[0],photo2:urls[1],submittedBy:email,verdict:input.verdict};
+ }catch(e){created.forEach(file=>{try{file.setTrashed(true)}catch(ignore){}});throw e;}
+ finally{lock.releaseLock();}
 }
