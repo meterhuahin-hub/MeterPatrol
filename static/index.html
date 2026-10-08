@@ -1,0 +1,9 @@
+<!doctype html><html lang="th"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>MeterPatrol — สำรวจมิเตอร์</title><link rel="stylesheet" href="/style.css"><script src="/app.js" defer></script></head><body>
+<header><div><small>ระบบบันทึกงานภาคสนาม</small><h1>MeterPatrol</h1></div><button id="reportButton">รายงานทั้งหมด</button></header>
+<main><section class="editor"><h2>บันทึกการสำรวจ</h2><p>เก็บข้อมูลมิเตอร์และอุปกรณ์ประกอบ ณ หน้างาน</p><form id="surveyForm"><div class="grid">
+<label>วันที่สำรวจ<input name="date" type="date" required></label><label>ผู้สำรวจ<input name="surveyor" required maxlength="2000"></label>
+<label>สถานที่ / ที่อยู่<input name="location" required maxlength="2000"></label><label>เลขประจำมิเตอร์<input name="meter" required maxlength="2000"></label>
+<label>ประเภทมิเตอร์<select name="type"><option>น้ำ</option><option>ไฟฟ้า</option><option>อื่น ๆ</option></select></label><label>เลขอ่านมิเตอร์ (ถ้ามี)<input name="reading" type="number" min="0" step="any"></label></div>
+<h3>อุปกรณ์ประกอบ</h3><p>จำนวนชำรุดที่พบ และจำนวนอุปกรณ์ใหม่ที่บันทึกในงานสำรวจนี้</p><div id="items"></div><button type="button" id="addItem" class="secondary">+ เพิ่มอุปกรณ์</button><label>หมายเหตุ<textarea name="notes" maxlength="2000" rows="3"></textarea></label><button id="saveButton" type="submit">บันทึกการสำรวจ</button><p id="status" role="status" aria-live="polite"></p></form></section>
+<section class="history"><h2>ประวัติการสำรวจ</h2><label>ค้นหาสถานที่ เลขมิเตอร์ หรือผู้สำรวจ<input id="search" type="search"></label><p id="count"></p><div id="records"></div></section>
+<section id="report" hidden><div class="reportTools"><button id="printButton">พิมพ์ / บันทึก PDF</button><button id="closeReport" class="secondary">ปิดรายงาน</button></div><div id="reportContent"></div></section></main><footer>ข้อมูลจัดเก็บในฐานข้อมูลของเครื่องที่รันระบบ • สำรองฐานข้อมูลเป็นประจำ</footer></body></html>
