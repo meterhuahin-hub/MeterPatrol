@@ -350,7 +350,10 @@
      */
     var nextTick = typeof process !== 'undefined' && process && typeof process.nextTick === 'function'
         ? (typeof setImmediate === 'function' ? setImmediate : process.nextTick)
-        : setTimeout;
+        : (typeof setTimeout === 'function' ? setTimeout : function() {
+            // Apps Script has no timer APIs. This app uses hashSync/compareSync only.
+            throw Error("Async bcrypt is unavailable in Apps Script; use synchronous methods");
+        });
 
     /**
      * Converts a JavaScript string to UTF8 bytes.
