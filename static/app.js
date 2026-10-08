@@ -1,6 +1,12 @@
 const $ = s => document.querySelector(s);
 const form = $('#surveyForm');
 let surveys = [];
+let csrf = '';
+async function api(path, options = {}) {
+ const r = await fetch(path, {...options, headers:{...options.headers, 'X-CSRF-Token':csrf}});
+ if(r.status === 401) { window.location.replace('/login'); throw Error('กรุณาเข้าสู่ระบบ'); }
+ return r;
+}
 const node = (tag, text) => { const el = document.createElement(tag); el.textContent = text; return el; };
 function addItem() {
   const row = document.createElement('div'); row.className = 'item';
@@ -17,7 +23,7 @@ function render() {
   if (!rows.length) $('#records').append(node('p','ยังไม่มีรายการที่ตรงกับการค้นหา'));
   rows.forEach(s => { const card = document.createElement('article'); card.append(node('h3',s.location),node('p',`${s.date} • มิเตอร์ ${s.meter} • ${s.surveyor}`)); const button = node('button','เปิดรายงาน'); button.onclick = () => report([s]); card.append(button); $('#records').append(card); });
 }
-async function load() { const r = await fetch('/api/surveys'); if (!r.ok) throw Error('โหลดข้อมูลไม่สำเร็จ'); surveys = await r.json(); render(); }
+async function load() { const r = await api('/api/surveys'); if (!r.ok) throw Error('โหลดข้อมูลไม่สำเร็จ'); surveys = await r.json(); render(); }
 function report(rows) {
   const target = $('#reportContent'); target.replaceChildren(node('h1','รายงานการสำรวจมิเตอร์'),node('p',`จำนวนงานสำรวจ ${rows.length} รายการ`));
   let damaged = 0, fresh = 0;
@@ -33,9 +39,14 @@ function report(rows) {
 form.onsubmit = async e => {
   e.preventDefault(); $('#saveButton').disabled = true; $('#status').textContent = 'กำลังบันทึก…';
   const data = Object.fromEntries(new FormData(form)); data.items = [...document.querySelectorAll('.item')].map(row => Object.fromEntries([...row.querySelectorAll('input')].map(input => [input.dataset.key,input.type === 'number' ? Number(input.value) : input.value])));
-  try { const r = await fetch('/api/surveys',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)}); const result = await r.json(); if (!r.ok) throw Error(result.error); form.reset(); setDate(); $('#items').replaceChildren(); addItem(); $('#status').textContent = 'บันทึกสำเร็จ'; try { await load(); } catch { $('#status').textContent = 'บันทึกสำเร็จ แต่โหลดประวัติไม่สำเร็จ กรุณารีเฟรชหน้า'; } }
+  try { const r = await api('/api/surveys',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)}); const result = await r.json(); if (!r.ok) throw Error(result.error); form.reset(); setDate(); $('#items').replaceChildren(); addItem(); $('#status').textContent = 'บันทึกสำเร็จ'; try { await load(); } catch { $('#status').textContent = 'บันทึกสำเร็จ แต่โหลดประวัติไม่สำเร็จ กรุณารีเฟรชหน้า'; } }
   catch (error) { $('#status').textContent = error.message; } finally { $('#saveButton').disabled = false; }
 };
 function setDate() { const d = new Date(); form.elements.date.value = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
 $('#addItem').onclick = addItem; $('#search').oninput = render; $('#reportButton').onclick = () => report(filtered()); $('#closeReport').onclick = () => $('#report').hidden = true; $('#printButton').onclick = () => window.print();
-setDate(); addItem(); load().catch(error => $('#count').textContent = error.message);
+$('#logoutButton').onclick = async () => {
+ try { const r = await api('/api/logout',{method:'POST'}); if(!r.ok) throw Error('ออกจากระบบไม่สำเร็จ'); window.location.replace('/login'); }
+ catch(error){ $('#status').textContent=error.message; }
+};
+setDate(); addItem(); $('#saveButton').disabled = true;
+(async () => { const r = await api('/api/me'); if(!r.ok) throw Error('โหลดผู้ใช้ไม่สำเร็จ'); const user=await r.json(); csrf=user.csrf; $('#currentUser').textContent=user.username; $('#saveButton').disabled=false; await load(); })().catch(error => $('#count').textContent=error.message);

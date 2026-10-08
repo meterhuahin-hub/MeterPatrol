@@ -1,5 +1,5 @@
 <!doctype html><html lang="th"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>MeterPatrol — สำรวจมิเตอร์</title><link rel="stylesheet" href="/style.css"><script src="/app.js" defer></script></head><body>
-<header><div><small>ระบบบันทึกงานภาคสนาม</small><h1>MeterPatrol</h1></div><button id="reportButton">รายงานทั้งหมด</button></header>
+<header><div><small>ระบบบันทึกงานภาคสนาม</small><h1>MeterPatrol</h1></div><span id="currentUser"></span><button id="logoutButton" class="secondary">ออกจากระบบ</button><button id="reportButton">รายงานทั้งหมด</button></header>
 <main><section class="editor"><h2>บันทึกการสำรวจ</h2><p>เก็บข้อมูลมิเตอร์และอุปกรณ์ประกอบ ณ หน้างาน</p><form id="surveyForm"><div class="grid">
 <label>วันที่สำรวจ<input name="date" type="date" required></label><label>ผู้สำรวจ<input name="surveyor" required maxlength="2000"></label>
 <label>สถานที่ / ที่อยู่<input name="location" required maxlength="2000"></label><label>เลขประจำมิเตอร์<input name="meter" required maxlength="2000"></label>
