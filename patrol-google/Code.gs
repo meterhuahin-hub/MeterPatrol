@@ -10,9 +10,10 @@ function user_(){
  return email;
 }
 function doGet(){
- try{user_();return HtmlService.createHtmlOutputFromFile('Index').setTitle('Patrol Survey').addMetaTag('viewport','width=device-width, initial-scale=1');}
+ try{user_();return HtmlService.createTemplateFromFile('Index').evaluate().setTitle('Patrol Survey').addMetaTag('viewport','width=device-width, initial-scale=1');}
  catch(e){return HtmlService.createHtmlOutput('<h1>Patrol Survey</h1><p>กรุณาใช้บัญชี Google ที่ผู้ดูแลอนุญาต และตรวจการตั้งค่า deployment</p>');}
 }
+function include_(name){return HtmlService.createHtmlOutputFromFile(name).getContent();}
 function sheet_(){
  const book=SpreadsheetApp.openById(SPREADSHEET_ID_);
  let sheet=book.getSheetByName('DATA');
@@ -52,7 +53,7 @@ function readRow_(row){
 }
 function listPatrol(){
  user_();const lock=LockService.getScriptLock();lock.waitLock(30000);
- try{const sheet=sheet_();if(sheet.getLastRow()<2)return [];return sheet.getRange(2,1,sheet.getLastRow()-1,HEADERS_.length).getValues().filter(row=>row.some(v=>v!==''&&v!==null)).map(readRow_).reverse();}
+ try{const sheet=sheet_();if(sheet.getLastRow()<2)return [];const deliveries=deliveryMap_();return sheet.getRange(2,1,sheet.getLastRow()-1,HEADERS_.length).getValues().filter(row=>row.some(v=>v!==''&&v!==null)).map(readRow_).map(r=>{const delivery=deliveries.get(r.id);return Object.assign(r,{delivery:delivery||null});}).reverse();}
  finally{lock.releaseLock();}
 }
 function photoName_(pea,key,requestId){
@@ -88,6 +89,61 @@ function savePatrol(input,requestId){
   sheet.getRange(rowIndex,1).setNote(JSON.stringify({recordedBy:email,fingerprint}));
   // If flush fails, leave photos intact: the row may have committed despite a lost response.
   created.length=0;SpreadsheetApp.flush();return {id:requestId};
+ }catch(e){created.forEach(file=>{try{file.setTrashed(true)}catch(ignore){}});throw e;}
+ finally{lock.releaseLock();}
+}
+
+const WORK_HEADERS_=['Record ID','WBS','PEA.','ผู้ส่งมอบ','ส่งมอบเมื่อ','รูปปฏิบัติ 1','รูปปฏิบัติ 2','รหัสคำขอ','Fingerprint'];
+function workSheet_(create){
+ const book=SpreadsheetApp.openById(SPREADSHEET_ID_);let sheet=book.getSheetByName('ContractorWork');
+ if(!sheet&&create){sheet=book.insertSheet('ContractorWork');sheet.getRange(1,1,1,WORK_HEADERS_.length).setValues([WORK_HEADERS_]);sheet.setFrozenRows(1);}
+ if(!sheet)return null;
+ const header=sheet.getRange(1,1,1,WORK_HEADERS_.length).getValues()[0];
+ if(!WORK_HEADERS_.every((h,i)=>h===String(header[i]).trim()))throw new Error('หัวตาราง ContractorWork ไม่ตรงกับระบบ');
+ return sheet;
+}
+function deliveryMap_(){
+ const sheet=workSheet_(false),map=new Map();
+ if(sheet&&sheet.getLastRow()>1)sheet.getRange(2,1,sheet.getLastRow()-1,WORK_HEADERS_.length).getValues().forEach(row=>{
+  if(row[0]&&row[5]&&row[6])map.set(String(row[0]),{submittedAt:row[4] instanceof Date?row[4].toISOString():String(row[4]),submittedBy:String(row[3]),photo1:String(row[5]),photo2:String(row[6])});
+ });
+ return map;
+}
+function completeContractorWork(input,requestId){
+ const email=user_();
+ if(!input||typeof input!=='object'||typeof input.recordId!=='string'||!input.recordId||input.recordId.length>100)throw new Error('งานไม่ถูกต้อง');
+ if(typeof requestId!=='string'||!/^[a-zA-Z0-9-]{16,80}$/.test(requestId))throw new Error('รหัสคำขอไม่ถูกต้อง');
+ const photos=photos_({before:input.photo1,after:input.photo2});
+ if(!photos.before||!photos.after)throw new Error('กรุณาแนบรูปปฏิบัติงานให้ครบ 2 รูป');
+ const fingerprint=Utilities.base64Encode(Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256,JSON.stringify([input.recordId,photos])));
+ const lock=LockService.getScriptLock();lock.waitLock(30000);const created=[];
+ try{
+  const data=sheet_(),rows=data.getLastRow()>1?data.getRange(2,1,data.getLastRow()-1,HEADERS_.length).getValues():[];
+  const index=rows.findIndex(row=>String(row[0])===input.recordId);
+  if(index<0)throw new Error('ไม่พบงานสำรวจใน DATA กรุณาโหลดข้อมูลใหม่');
+  if(rows.filter(row=>String(row[0])===input.recordId).length!==1)throw new Error('Record ID ซ้ำใน DATA กรุณาให้ผู้ดูแลตรวจสอบ');
+  const work=readRow_(rows[index]);if(!work.wbs.trim()||!work.pea.trim())throw new Error('งานนี้ไม่มี WBS หรือ PEA กรุณาให้ผู้สำรวจเติมข้อมูลก่อน');
+  const sheet=workSheet_(true),previous=sheet.getLastRow()>1?sheet.getRange(2,1,sheet.getLastRow()-1,WORK_HEADERS_.length).getValues():[];
+  const duplicate=previous.find(row=>String(row[7])===requestId);
+  if(duplicate){
+   if(String(duplicate[0])!==input.recordId||String(duplicate[3])!==email||String(duplicate[8])!==fingerprint)throw new Error('รหัสคำขอเดิมมีข้อมูลเปลี่ยน');
+   data.getRange(index+2,14).setValue('ส่งมอบงาน');SpreadsheetApp.flush();return {id:input.recordId,submittedAt:String(duplicate[4]),photo1:String(duplicate[5]),photo2:String(duplicate[6])};
+  }
+  if(previous.some(row=>String(row[0])===input.recordId))throw new Error('งานนี้ส่งมอบแล้ว กรุณาโหลดข้อมูลล่าสุด');
+  const folderId=PropertiesService.getScriptProperties().getProperty('PHOTO_FOLDER_ID');if(!folderId)throw new Error('ผู้ดูแลต้องตั้ง PHOTO_FOLDER_ID และแชร์โฟลเดอร์ให้ผู้รับจ้าง');
+  const folder=DriveApp.getFolderById(folderId),urls=[];
+  const label=work.pea.replace(/[\\/:*?"<>|\x00-\x1f\x7f]/g,'_').slice(0,100);
+  [photos.before,photos.after].forEach((image,i)=>{
+   const blob=Utilities.newBlob(Utilities.base64Decode(image.split(',')[1]),'image/jpeg',label+'_ปฏิบัติ'+(i+1)+'_'+requestId+'.jpg');
+   const file=folder.createFile(blob);created.push(file);urls.push(file.getUrl());
+  });
+  const now=new Date().toISOString(),safe=v=>/^[=+\-@]/.test(String(v))?"'"+v:String(v);
+  const values=[work.id,work.wbs,work.pea,email,now,urls[0],urls[1],requestId,fingerprint];
+  const range=sheet.getRange(sheet.getLastRow()+1,1,1,WORK_HEADERS_.length);range.setNumberFormat('@');range.setValues([values.map(safe)]);
+  // Keep files after the durable delivery row; a retry recovers a failed DATA status update.
+  created.length=0;
+  data.getRange(index+2,14).setValue('ส่งมอบงาน');SpreadsheetApp.flush();
+  return {id:work.id,submittedAt:now,photo1:urls[0],photo2:urls[1]};
  }catch(e){created.forEach(file=>{try{file.setTrashed(true)}catch(ignore){}});throw e;}
  finally{lock.releaseLock();}
 }
