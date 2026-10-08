@@ -20,7 +20,21 @@ function sheet_(){
  if(!sheet){sheet=book.insertSheet('DATA');sheet.getRange(1,1,1,HEADERS_.length).setValues([HEADERS_]);sheet.setFrozenRows(1);}
  const headers=sheet.getRange(1,1,1,HEADERS_.length).getValues()[0].map(v=>String(v).replace(/\s+/g,' ').trim());
  if(!HEADERS_.every((v,i)=>headers[i]===v))throw new Error('หัวตาราง DATA ไม่ตรงกับระบบ ห้ามเขียนทับข้อมูล กรุณาติดต่อผู้ดูแล');
+ ensureWorkPhotoColumns_(sheet);
  return sheet;
+}
+function ensureWorkPhotoColumns_(sheet){
+ const max=sheet.getMaxColumns();if(max<46)sheet.insertColumnsAfter(max,46-max);
+ const range=sheet.getRange(1,45,1,2),header=range.getValues()[0];
+ const names=['รูปปฏิบัติงาน 1','รูปปฏิบัติงาน 2'];
+ if(header.some((v,i)=>String(v).trim()!==''&&String(v).trim()!==names[i]))throw new Error('คอลัมน์ AS/AT มีหัวตารางอื่นอยู่ ระบบจะไม่เขียนทับ');
+ if(header.some(v=>String(v).trim()==='')){
+  if(sheet.getLastRow()>1){const values=sheet.getRange(2,45,sheet.getLastRow()-1,2).getValues();if(values.some(row=>row.some((v,i)=>!String(header[i]).trim()&&v!==''&&v!==null&&v!==undefined)))throw new Error('AS/AT มีข้อมูลแต่ไม่มีหัวตาราง กรุณาตรวจสอบก่อน');}
+  range.setValues([names]);
+ }
+}
+function setWorkPhotoLinks_(sheet,row,photo1,photo2){
+ sheet.getRange(row,45,1,2).setValues([[photo1,photo2]]);
 }
 function validate_(input){
  if(!input||typeof input!=='object'||Array.isArray(input))throw new Error('ข้อมูลไม่ถูกต้อง');
@@ -127,7 +141,7 @@ function completeContractorWork(input,requestId){
   const duplicate=previous.find(row=>String(row[7])===requestId);
   if(duplicate){
    if(String(duplicate[0])!==input.recordId||String(duplicate[3])!==email||String(duplicate[8])!==fingerprint)throw new Error('รหัสคำขอเดิมมีข้อมูลเปลี่ยน');
-   data.getRange(index+2,14).setValue('ส่งมอบงาน');SpreadsheetApp.flush();return {id:input.recordId,submittedAt:String(duplicate[4]),photo1:String(duplicate[5]),photo2:String(duplicate[6])};
+   setWorkPhotoLinks_(data,index+2,String(duplicate[5]),String(duplicate[6]));data.getRange(index+2,14).setValue('ส่งมอบงาน');SpreadsheetApp.flush();return {id:input.recordId,submittedAt:String(duplicate[4]),photo1:String(duplicate[5]),photo2:String(duplicate[6])};
   }
   if(previous.some(row=>String(row[0])===input.recordId))throw new Error('งานนี้ส่งมอบแล้ว กรุณาโหลดข้อมูลล่าสุด');
   const folderId=PropertiesService.getScriptProperties().getProperty('PHOTO_FOLDER_ID');if(!folderId)throw new Error('ผู้ดูแลต้องตั้ง PHOTO_FOLDER_ID และแชร์โฟลเดอร์ให้ผู้รับจ้าง');
@@ -142,8 +156,27 @@ function completeContractorWork(input,requestId){
   const range=sheet.getRange(sheet.getLastRow()+1,1,1,WORK_HEADERS_.length);range.setNumberFormat('@');range.setValues([values.map(safe)]);
   // Keep files after the durable delivery row; a retry recovers a failed DATA status update.
   created.length=0;
-  data.getRange(index+2,14).setValue('ส่งมอบงาน');SpreadsheetApp.flush();
+  setWorkPhotoLinks_(data,index+2,urls[0],urls[1]);data.getRange(index+2,14).setValue('ส่งมอบงาน');SpreadsheetApp.flush();
   return {id:work.id,submittedAt:now,photo1:urls[0],photo2:urls[1]};
  }catch(e){created.forEach(file=>{try{file.setTrashed(true)}catch(ignore){}});throw e;}
  finally{lock.releaseLock();}
+}
+
+// Run once from Apps Script to copy existing delivery photo links into DATA.
+function syncContractorPhotos(){
+ user_();const lock=LockService.getScriptLock();lock.waitLock(30000);
+ try{
+  const data=sheet_(),deliveries=deliveryMap_();let updated=0,conflicts=0;
+  if(data.getLastRow()>1){
+   const rows=data.getRange(2,1,data.getLastRow()-1,46).getValues();
+   const counts=new Map();rows.forEach(row=>counts.set(String(row[0]),(counts.get(String(row[0]))||0)+1));
+   rows.forEach((row,i)=>{
+    const id=String(row[0]),delivery=deliveries.get(id);if(!delivery)return;
+    const target=[delivery.photo1,delivery.photo2],current=[row[44]||'',row[45]||''];
+    if(counts.get(id)!==1||current.some((url,j)=>url&&url!==target[j])){conflicts++;return;}
+    if(current.some((url,j)=>url!==target[j])){setWorkPhotoLinks_(data,i+2,...target);updated++;}
+   });
+  }
+  SpreadsheetApp.flush();const result={updated,conflicts};console.log(JSON.stringify(result));return result;
+ }finally{lock.releaseLock();}
 }
