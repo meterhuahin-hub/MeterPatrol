@@ -1,0 +1,15 @@
+const fs=require('fs'),vm=require('vm'),assert=require('assert/strict'),crypto=require('crypto');
+let rows=[],email='staff@example.test',released=0;
+const props={ALLOWED_EMAILS:email};
+const sheet={getLastRow:()=>rows.length,setFrozenRows:()=>{},getRange:(r,c,n,w)=>({getValues:()=>rows.slice(r-1,r-1+n).map(row=>row.slice(c-1,c-1+w)),setValues:vs=>vs.forEach((row,i)=>rows[r-1+i]=row.map(v=>typeof v==='string'&&v.startsWith("'")?v.slice(1):v)),setNumberFormat:()=>{}})};
+const context=vm.createContext({Session:{getActiveUser:()=>({getEmail:()=>email})},PropertiesService:{getScriptProperties:()=>({getProperty:k=>props[k]})},SpreadsheetApp:{openById:id=>{assert.equal(id,'1DydK1q8PZELyk2gTFmtxxiUtgSz6EYxRncw1Ep7JDSg');return {getSheetByName:()=>rows.length?sheet:null,insertSheet:name=>{assert.equal(name,'PatrolSurvey');return sheet}}},flush:()=>{}},LockService:{getScriptLock:()=>({waitLock:()=>{},releaseLock:()=>released++})},Utilities:{DigestAlgorithm:{SHA_256:'sha256'},computeDigest:(alg,text)=>crypto.createHash(alg).update(text).digest(),base64Encode:bytes=>Buffer.from(bytes).toString('base64')}});
+vm.runInContext(fs.readFileSync(__dirname+'/Code.gs','utf8'),context);
+const input={surveyDate:'2026-10-08',wbs:'WBS-01',transformer:'TR001',pea:'00001',note:'=formula',old_cab:2,new_cab:3};
+assert.equal(context.listPatrol().length,0);
+const id='request-test-123456';context.savePatrol(input,id);context.savePatrol(input,id);assert.equal(rows.length,2);
+const r=context.listPatrol()[0];assert.equal(r.pea,'00001');assert.equal(r.old_cab,2);assert.equal(r.new_cab,3);assert.equal(r.note,'=formula');assert.equal(r.recordedBy,email);
+assert.throws(()=>context.savePatrol({...input,wbs:'changed'},id));
+for(const change of [{surveyDate:'2026-02-30'},{old_cab:-1},{old_cab:NaN},{note:{}},{before:'data:image/jpeg;base64,YWJj'}])assert.throws(()=>context.savePatrol({...input,...change},'another-request-12345'));
+assert.equal(rows.length,2);
+email='outside@example.test';assert.throws(()=>context.listPatrol());assert.throws(()=>context.savePatrol(input,id));email='';assert.throws(()=>context.listPatrol());email='staff@example.test';rows[0][0]='broken';assert.throws(()=>context.listPatrol());assert.ok(released>0);
+console.log('PASS: configured sheet, read/write, retry deduplication, leading-zero PEA, validation, missing photo folder and unauthorized access (Google APIs simulated)');
