@@ -55,6 +55,10 @@ function listPatrol(){
  try{const sheet=sheet_();if(sheet.getLastRow()<2)return [];return sheet.getRange(2,1,sheet.getLastRow()-1,HEADERS_.length).getValues().filter(row=>row.some(v=>v!==''&&v!==null)).map(readRow_).reverse();}
  finally{lock.releaseLock();}
 }
+function photoName_(pea,key,requestId){
+ const label=String(pea||'').trim().replace(/[\\/:*?"<>|\x00-\x1f\x7f]/g,'_').slice(0,100)||'ไม่ระบุ-PEA';
+ return label+'_'+(key==='before'?'ก่อน':'หลัง')+'_'+requestId+'.jpg';
+}
 function savePatrol(input,requestId){
  const email=user_(),clean=validate_(input),photos=photos_(input);
  if(typeof requestId!=='string'||!/^[a-zA-Z0-9-]{16,80}$/.test(requestId))throw new Error('รหัสคำขอไม่ถูกต้อง');
@@ -73,7 +77,7 @@ function savePatrol(input,requestId){
   let folder=null;
   if(photos.before||photos.after){const folderId=PropertiesService.getScriptProperties().getProperty('PHOTO_FOLDER_ID');if(!folderId)throw new Error('แนบรูปต้องตั้ง PHOTO_FOLDER_ID และแชร์โฟลเดอร์ Drive ให้เจ้าหน้าที่ก่อน หรือบันทึกโดยไม่แนบรูป');folder=DriveApp.getFolderById(folderId);}
   const r=Object.assign(clean,{id:requestId,date:new Date().toISOString(),recordedBy:email,fingerprint,before:'',after:''});
-  for(const key of ['before','after'])if(photos[key]){const bytes=Utilities.base64Decode(photos[key].split(',')[1]);const file=folder.createFile(Utilities.newBlob(bytes,'image/jpeg',requestId+'-'+key+'.jpg'));created.push(file);r[key]=file.getUrl();}
+  for(const key of ['before','after'])if(photos[key]){const bytes=Utilities.base64Decode(photos[key].split(',')[1]);const file=folder.createFile(Utilities.newBlob(bytes,'image/jpeg',photoName_(clean.pea,key,requestId)));created.push(file);r[key]=file.getUrl();}
   const safe=v=>typeof v==='number'?v:(/^[=+\-@]/.test(String(v))?"'"+v:String(v));
   const coords=clean.latlong?clean.latlong.split(',').map(v=>Number(v.trim())):['',''];r.latitude=coords[0];r.longitude=coords[1];
   const values=DATA_KEYS_.map(key=>r[key]);
