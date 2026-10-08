@@ -3,14 +3,15 @@ const TEXT_KEYS_=['surveyDate','wbs','poleSize','jobType','latlong','surveyResul
 const NUMBER_KEYS_=["old_bolt_8in", "old_bolt_10in", "old_bolt_12in", "old_bolt_14in", "old_bolt_16in", "old_bolt_18in", "old_bolt_แหวน", "old_wire_สีฟ้า", "old_wire_สีดำ", "old_wire_2x6", "old_wire_2x10", "old_wire_25", "old_wire_50", "new_bolt_8in", "new_bolt_10in", "new_bolt_12in", "new_bolt_14in", "new_bolt_16in", "new_bolt_18in", "new_bolt_แหวน", "wood_20", "wood_60", "wood_120", "new_wire_2x10", "new_wire_50", "old_cab", "new_cab"];
 const HEADERS_=["Record ID", "บันทึกเมื่อ", "วันที่", "หมายเลขงาน WBS", "หม้อแปลง TR", "เสาที่", "PEA.", "ขนาด/เฟส", "เครื่อง", "ขนาดเสา", "ประเภทงาน", "Latitude", "Longitude", "ผลสำรวจ", "เก่า-น็อต 8\"", "เก่า-น็อต 10\"", "เก่า-น็อต 12\"", "เก่า-น็อต 14\"", "เก่า-น็อต 16\"", "เก่า-น็อต 18\"", "เก่า-แหวน", "เก่า-สายไฟสีฟ้า", "เก่า-สายไฟสีดำ", "เก่า-สายไฟ 2x6", "เก่า-สายไฟ 2x10", "เก่า-สายไฟ 25", "เก่า-สายไฟ 50", "เก่า-ตู้", "ใหม่-น็อต 8\"", "ใหม่-น็อต 10\"", "ใหม่-น็อต 12\"", "ใหม่-น็อต 14\"", "ใหม่-น็อต 16\"", "ใหม่-น็อต 18\"", "ใหม่-แหวน", "ใหม่-แป้นไม้ 20", "ใหม่-แป้นไม้ 60", "ใหม่-แป้นไม้ 120", "ใหม่-สายไฟ 2x10", "ใหม่-สายไฟ 50", "ใหม่-ตู้", "หมายเหตุ", "รูปก่อน", "รูปหลัง"];
 const DATA_KEYS_=["id", "date", "surveyDate", "wbs", "transformer", "pole", "pea", "phase", "machine", "poleSize", "jobType", "latitude", "longitude", "surveyResult", "old_bolt_8in", "old_bolt_10in", "old_bolt_12in", "old_bolt_14in", "old_bolt_16in", "old_bolt_18in", "old_bolt_แหวน", "old_wire_สีฟ้า", "old_wire_สีดำ", "old_wire_2x6", "old_wire_2x10", "old_wire_25", "old_wire_50", "old_cab", "new_bolt_8in", "new_bolt_10in", "new_bolt_12in", "new_bolt_14in", "new_bolt_16in", "new_bolt_18in", "new_bolt_แหวน", "wood_20", "wood_60", "wood_120", "new_wire_2x10", "new_wire_50", "new_cab", "note", "before", "after"];
-function user_(){
+function googleUser_(){
  const email=String(Session.getActiveUser().getEmail()||'').trim().toLowerCase();
  const allowed=String(PropertiesService.getScriptProperties().getProperty('ALLOWED_EMAILS')||'').split(',').map(s=>s.trim().toLowerCase()).filter(Boolean);
  if(!email||!allowed.includes(email))throw new Error('บัญชีนี้ไม่ได้รับอนุญาต กรุณาตรวจ ALLOWED_EMAILS และตั้ง Execute as: User accessing the web app');
  return email;
 }
+function user_(token){accountSession_(token);return googleUser_();}
 function doGet(){
- try{user_();return HtmlService.createTemplateFromFile('Index').evaluate().setTitle('งานปรับปรุง WBS').addMetaTag('viewport','width=device-width, initial-scale=1');}
+ try{googleUser_();return HtmlService.createTemplateFromFile('Index').evaluate().setTitle('งานปรับปรุง WBS').addMetaTag('viewport','width=device-width, initial-scale=1');}
  catch(e){return HtmlService.createHtmlOutput('<h1>งานปรับปรุง WBS</h1><p>กรุณาใช้บัญชี Google ที่ผู้ดูแลอนุญาต และตรวจการตั้งค่า deployment</p>');}
 }
 function include_(name){return HtmlService.createHtmlOutputFromFile(name).getContent();}
@@ -79,8 +80,8 @@ function readRow_(row){
  r.latlong=r.latitude!==''&&r.longitude!==''?r.latitude+','+r.longitude:'';
  return r;
 }
-function listPatrol(){
- user_();const lock=LockService.getScriptLock();lock.waitLock(30000);
+function listPatrol(token){
+ user_(token);const lock=LockService.getScriptLock();lock.waitLock(30000);
  try{const sheet=sheet_();if(sheet.getLastRow()<2)return [];const deliveries=deliveryMap_(),inspections=inspectionMap_();return sheet.getRange(2,1,sheet.getLastRow()-1,HEADERS_.length).getValues().filter(row=>row.some(v=>v!==''&&v!==null)).map(readRow_).map(r=>{const delivery=deliveries.get(r.id);return Object.assign(r,{delivery:delivery||null,inspection:inspections.get(r.id)||null});}).reverse();}
  finally{lock.releaseLock();}
 }
@@ -88,8 +89,8 @@ function photoName_(pea,key,requestId){
  const label=String(pea||'').trim().replace(/[\\/:*?"<>|\x00-\x1f\x7f]/g,'_').slice(0,100)||'ไม่ระบุ-PEA';
  return label+'_'+(key==='before'?'ก่อน':'หลัง')+'_'+requestId+'.jpg';
 }
-function savePatrol(input,requestId){
- const email=user_(),clean=validate_(input),photos=photos_(input);
+function savePatrol(input,requestId,token){
+ const email=user_(token),clean=validate_(input),photos=photos_(input);
  if(typeof requestId!=='string'||!/^[a-zA-Z0-9-]{16,80}$/.test(requestId))throw new Error('รหัสคำขอไม่ถูกต้อง');
  const fingerprint=Utilities.base64Encode(Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256,JSON.stringify([clean,photos])));
  const lock=LockService.getScriptLock();lock.waitLock(30000);const created=[];
@@ -137,8 +138,8 @@ function deliveryMap_(){
  });
  return map;
 }
-function completeContractorWork(input,requestId){
- const email=user_();
+function completeContractorWork(input,requestId,token){
+ const email=user_(token);
  if(!input||typeof input!=='object'||typeof input.recordId!=='string'||!input.recordId||input.recordId.length>100)throw new Error('งานไม่ถูกต้อง');
  if(typeof requestId!=='string'||!/^[a-zA-Z0-9-]{16,80}$/.test(requestId))throw new Error('รหัสคำขอไม่ถูกต้อง');
  const photos=photos_({before:input.photo1,after:input.photo2});
@@ -177,8 +178,8 @@ function completeContractorWork(input,requestId){
 }
 
 // Run once from Apps Script to copy existing delivery photo links into DATA.
-function syncContractorPhotos(){
- user_();const lock=LockService.getScriptLock();lock.waitLock(30000);
+function syncContractorPhotos(token){
+ maintenanceUser_(token);const lock=LockService.getScriptLock();lock.waitLock(30000);
  try{
   const data=sheet_(),deliveries=deliveryMap_();let updated=0,conflicts=0;
   if(data.getLastRow()>1){
@@ -211,8 +212,8 @@ function inspectionMap_(){
  });
  return map;
 }
-function saveInspection(input,requestId){
- const email=user_();
+function saveInspection(input,requestId,token){
+ const email=user_(token);
  if(!input||!['ผ่าน','ไม่ผ่าน'].includes(input.verdict))throw new Error('ผลตรวจไม่ถูกต้อง');
  if(!input||typeof input!=='object'||typeof input.recordId!=='string'||!input.recordId||input.recordId.length>100)throw new Error('งานไม่ถูกต้อง');
  if(typeof requestId!=='string'||!/^[a-zA-Z0-9-]{16,80}$/.test(requestId))throw new Error('รหัสคำขอไม่ถูกต้อง');
@@ -250,8 +251,8 @@ function saveInspection(input,requestId){
  finally{lock.releaseLock();}
 }
 
-function syncInspectionPhotos(){
- user_();const lock=LockService.getScriptLock();lock.waitLock(30000);
+function syncInspectionPhotos(token){
+ maintenanceUser_(token);const lock=LockService.getScriptLock();lock.waitLock(30000);
  try{
   const data=sheet_(),deliveries=inspectionMap_();let updated=0,conflicts=0;
   if(data.getLastRow()>1){
@@ -270,8 +271,8 @@ function syncInspectionPhotos(){
 
 
 // Resolve only photo links recorded for this work; never accept arbitrary Drive IDs.
-function getWorkPhoto(recordId,kind,index){
- user_();if(typeof recordId!=='string'||!['delivery','inspection'].includes(kind)||![1,2].includes(index))throw new Error('คำขอรูปไม่ถูกต้อง');
+function getWorkPhoto(recordId,kind,index,token){
+ user_(token);if(typeof recordId!=='string'||!['delivery','inspection'].includes(kind)||![1,2].includes(index))throw new Error('คำขอรูปไม่ถูกต้อง');
  const item=(kind==='delivery'?deliveryMap_():inspectionMap_()).get(recordId);
  if(!item)throw new Error('ไม่พบรูปของงานนี้');
  const url=item[index===1?'photo1':'photo2'];

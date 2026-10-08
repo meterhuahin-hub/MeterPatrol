@@ -6,6 +6,7 @@ const folder={createFile:blob=>{const f={name:blob.name,trashed:false,getUrl:()=
 const book={getSheetByName:name=>sheets.get(name)||null,insertSheet:makeSheet};
 const c=vm.createContext({Session:{getActiveUser:()=>({getEmail:()=>email})},PropertiesService:{getScriptProperties:()=>({getProperty:k=>props[k]})},SpreadsheetApp:{openById:()=>book,flush:()=>{}},LockService:{getScriptLock:()=>({waitLock:()=>{},releaseLock:()=>{}})},DriveApp:{getFileById:id=>{assert.match(id,/^photo-/);return {getBlob:()=>({getBytes:()=>Buffer.from('jpeg-photo'),getContentType:()=> 'image/jpeg'})};},getFolderById:id=>{assert.equal(id,'shared-folder');return folder;}},Utilities:{DigestAlgorithm:{SHA_256:'sha256'},computeDigest:(a,t)=>crypto.createHash(a).update(t).digest(),base64Encode:b=>Buffer.from(b).toString('base64'),base64Decode:s=>Buffer.from(s,'base64'),newBlob:(bytes,mime,name)=>({bytes,mime,name})}});
 vm.runInContext(fs.readFileSync(__dirname+'/Code.gs','utf8'),c);
+c.accountSession_=()=>({role:"user"});c.maintenanceUser_=()=>c.googleUser_();
 c.savePatrol({surveyDate:'2026-10-08',pea:'00001',wbs:'WBS-A',latlong:'12.5,99.9'},'survey-request-12345');
 const photos={recordId:'survey-request-12345',photo1:'data:image/jpeg;base64,YWJj',photo2:'data:image/jpeg;base64,ZGVm'};
 c.completeContractorWork(photos,'work-request-12345');const data=sheets.get('DATA'),originalLinks=data.rows[1].slice(42,46);
