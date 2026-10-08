@@ -157,7 +157,7 @@ function renderContractor(){
   if(typeof L==='undefined'){document.getElementById('mapStatus').textContent='โหลดแผนที่ไม่ได้ ใช้รายการงานด้านล่างเพื่อนำทาง';return;}
   if(!contractMap){
    contractMap=L.map('contractMap').setView([12.5683,99.9577],12);
-   const tiles=L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors'}).addTo(contractMap);
+   const tiles = L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {maxZoom: 19, attribution: "&copy; OpenStreetMap contributors"}).addTo(contractMap);
    tiles.on('tileerror',()=>document.getElementById('mapStatus').textContent='โหลดพื้นแผนที่บางส่วนไม่ได้ ยังเลือกงานและกดนำทางได้');
    contractLayer=L.layerGroup().addTo(contractMap);
   }
