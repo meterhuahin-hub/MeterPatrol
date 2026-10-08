@@ -10,8 +10,8 @@ function user_(){
  return email;
 }
 function doGet(){
- try{user_();return HtmlService.createTemplateFromFile('Index').evaluate().setTitle('Patrol Survey').addMetaTag('viewport','width=device-width, initial-scale=1');}
- catch(e){return HtmlService.createHtmlOutput('<h1>Patrol Survey</h1><p>กรุณาใช้บัญชี Google ที่ผู้ดูแลอนุญาต และตรวจการตั้งค่า deployment</p>');}
+ try{user_();return HtmlService.createTemplateFromFile('Index').evaluate().setTitle('งานปรับปรุง WBS').addMetaTag('viewport','width=device-width, initial-scale=1');}
+ catch(e){return HtmlService.createHtmlOutput('<h1>งานปรับปรุง WBS</h1><p>กรุณาใช้บัญชี Google ที่ผู้ดูแลอนุญาต และตรวจการตั้งค่า deployment</p>');}
 }
 function include_(name){return HtmlService.createHtmlOutputFromFile(name).getContent();}
 function sheet_(){
