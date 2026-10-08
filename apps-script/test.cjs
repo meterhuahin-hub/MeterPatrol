@@ -1,0 +1,18 @@
+const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/strict');
+let email='staff@example.test',rows=[],released=0,flushes=0;
+const headers=['รหัสงาน','เวลาบันทึก','บัญชีผู้บันทึก','วันที่สำรวจ','ผู้สำรวจ','สถานที่','เลขมิเตอร์','ประเภท','เลขอ่าน','ชำรุดรวม','ใหม่รวม','หมายเหตุ','ข้อมูล JSON'];
+const sheet={getLastRow:()=>rows.length,setFrozenRows:()=>{},getRange:(r,c,n,w)=>({getValues:()=>rows.slice(r-1,r-1+n).map(row=>row.slice(c-1,c-1+w)),setValues:values=>{values.forEach((row,i)=>rows[r-1+i]=row.map(v=>String(v).startsWith("'")?String(v).slice(1):v));},setNumberFormat:()=>{}})};
+const props={SPREADSHEET_ID:'test-sheet',ALLOWED_EMAILS:'staff@example.test'};
+const context=vm.createContext({console,Session:{getActiveUser:()=>({getEmail:()=>email})},PropertiesService:{getScriptProperties:()=>({getProperty:k=>props[k]})},SpreadsheetApp:{openById:id=>{assert.equal(id,'test-sheet');return {getSheetByName:()=>rows.length?sheet:null,insertSheet:()=>sheet};},flush:()=>flushes++},LockService:{getScriptLock:()=>({waitLock:()=>{},releaseLock:()=>released++})}});
+vm.runInContext(fs.readFileSync(__dirname+'/Code.gs','utf8'),context);
+const survey={date:'2026-10-08',surveyor:'สมชาย',location:'=IMPORTXML("bad")',meter:'00001',type:'น้ำ',reading:'125.5',notes:'ตรวจแล้ว',items:[{name:'วาล์ว',damaged:2,new:3}]};
+const id='test-request-123456789';
+assert.equal(context.saveSurvey(survey,id).id,id);assert.equal(rows.length,2);assert.equal(rows[1][6],'00001');assert.equal(flushes,1);
+context.saveSurvey(survey,id);assert.equal(rows.length,2);
+assert.throws(()=>context.saveSurvey({...survey,location:'different'},id));
+const loaded=context.listSurveys();assert.equal(loaded[0].location,survey.location);assert.equal(loaded[0].items[0].damaged,2);assert.equal(loaded[0].recorded_by,email);
+for(const patch of [{date:'2026-02-30'},{date:''},{meter:''},{reading:'NaN'},{items:[{name:'วาล์ว',damaged:-1,new:0}]}]) assert.throws(()=>context.saveSurvey({...survey,...patch},'another-request-12345'));
+email='stranger@example.test';assert.throws(()=>context.listSurveys());assert.throws(()=>context.saveSurvey(survey,id));assert.throws(()=>context.getCurrentUser());
+email='';assert.throws(()=>context.listSurveys());email='staff@example.test';props.ALLOWED_EMAILS='';assert.throws(()=>context.listSurveys());props.ALLOWED_EMAILS=email;
+rows[0][0]='changed';assert.throws(()=>context.listSurveys());assert.ok(released>=4);
+console.log('PASS: simulated Apps Script auth denial, validation, persistence roundtrip, retry deduplication, leading zeros and incompatible headers');

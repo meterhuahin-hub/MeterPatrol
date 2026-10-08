@@ -1,7 +1,10 @@
 # MeterPatrol
 เว็บแอปภาษาไทยสำหรับสำรวจมิเตอร์ อุปกรณ์ชำรุด/ใหม่ และรายงานพิมพ์หรือบันทึก PDF
 
-## พัฒนาในเครื่อง
+## เวอร์ชัน Google Apps Script (แนวทางที่เลือก)
+ดู [ขั้นตอนเผยแพร่และสิทธิ์ Google](apps-script/README.md) โค้ดอยู่ใน `apps-script/` ใช้ Google Sheets เก็บข้อมูล และเข้าผ่านบัญชี Google ไม่ต้อง deploy เว็บ Python ด้านล่าง
+
+## พัฒนาเว็บ Python ในเครื่อง
 Python 3.12 ขึ้นไป
 ```sh
 python -m venv .venv
