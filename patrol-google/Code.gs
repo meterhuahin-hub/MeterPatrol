@@ -135,7 +135,7 @@ function workSheet_(create){
 function deliveryMap_(){
  const sheet=workSheet_(false),map=new Map();
  if(sheet&&sheet.getLastRow()>1)sheet.getRange(2,1,sheet.getLastRow()-1,WORK_HEADERS_.length).getValues().forEach(row=>{
-  if(row[0]&&row[5]&&row[6])map.set(String(row[0]),{submittedAt:row[4] instanceof Date?row[4].toISOString():String(row[4]),submittedBy:String(row[3]),photo1:String(row[5]),photo2:String(row[6])});
+  if(row[0]&&row[5]&&row[6])map.set(String(row[0]),{submittedAt:row[4] instanceof Date?row[4].toISOString():String(row[4]),submittedBy:String(row[3]),photo1:String(row[5]),photo2:String(row[6]),requestId:String(row[7])});
  });
  return map;
 }
@@ -157,9 +157,9 @@ function completeContractorWork(input,requestId,token){
   const duplicate=previous.find(row=>String(row[7])===requestId);
   if(duplicate){
    if(String(duplicate[0])!==input.recordId||String(duplicate[3])!==email||String(duplicate[8])!==fingerprint)throw new Error('รหัสคำขอเดิมมีข้อมูลเปลี่ยน');
-   setWorkPhotoLinks_(data,index+2,String(duplicate[5]),String(duplicate[6]));data.getRange(index+2,14).setValue((inspectionMap_().get(input.recordId)||{}).verdict||'ส่งมอบงาน');SpreadsheetApp.flush();return {id:input.recordId,submittedAt:String(duplicate[4]),photo1:String(duplicate[5]),photo2:String(duplicate[6])};
+   const latest=previous.filter(row=>String(row[0])===input.recordId).pop();setWorkPhotoLinks_(data,index+2,String(latest[5]),String(latest[6]));data.getRange(index+2,14).setValue((inspectionMap_().get(input.recordId)||{}).verdict||'ส่งมอบงาน');SpreadsheetApp.flush();return {id:input.recordId,submittedAt:String(latest[4]),photo1:String(latest[5]),photo2:String(latest[6])};
   }
-  if(previous.some(row=>String(row[0])===input.recordId))throw new Error('งานนี้ส่งมอบแล้ว กรุณาโหลดข้อมูลล่าสุด');
+  if(previous.some(row=>String(row[0])===input.recordId)&&(inspectionMap_().get(input.recordId)||{}).verdict!=='ไม่ผ่าน')throw new Error('งานนี้ส่งมอบแล้ว ส่งแก้ไขได้เฉพาะงานตรวจไม่ผ่าน');
   const folderId=PropertiesService.getScriptProperties().getProperty('PHOTO_FOLDER_ID');if(!folderId)throw new Error('ผู้ดูแลต้องตั้ง PHOTO_FOLDER_ID และแชร์โฟลเดอร์ให้ผู้รับจ้าง');
   const folder=DriveApp.getFolderById(folderId),urls=[];
   const label=work.pea.replace(/[\\/:*?"<>|\x00-\x1f\x7f]/g,'_').slice(0,100);
@@ -197,19 +197,20 @@ function syncContractorPhotos(token){
  }finally{lock.releaseLock();}
 }
 
-const INSPECT_HEADERS_=['Record ID','WBS','PEA.','ผู้ตรวจ','ตรวจเมื่อ','รูปตรวจรับ 1','รูปตรวจรับ 2','รหัสคำขอ','Fingerprint','ผลตรวจ','หมายเหตุการตรวจรับ'];
+const INSPECT_HEADERS_=['Record ID','WBS','PEA.','ผู้ตรวจ','ตรวจเมื่อ','รูปตรวจรับ 1','รูปตรวจรับ 2','รหัสคำขอ','Fingerprint','ผลตรวจ','หมายเหตุการตรวจรับ','รหัสส่งมอบที่ตรวจ'];
 function inspectionSheet_(create){
  const book=SpreadsheetApp.openById(SPREADSHEET_ID_);let sheet=book.getSheetByName('InspectorReviews');
  if(!sheet&&create){sheet=book.insertSheet('InspectorReviews');sheet.getRange(1,1,1,INSPECT_HEADERS_.length).setValues([INSPECT_HEADERS_]);sheet.setFrozenRows(1);}
  if(!sheet)return null;
  const header=sheet.getRange(1,1,1,INSPECT_HEADERS_.length).getValues()[0];
- if(!header[10]&&create){sheet.getRange(1,11).setValue(INSPECT_HEADERS_[10]);header[10]=INSPECT_HEADERS_[10];}
- if(!INSPECT_HEADERS_.every((h,i)=>(i===10&&!header[i])||h===String(header[i]).trim()))throw new Error('หัวตาราง InspectorReviews ไม่ตรงกับระบบ');
+ for(const i of [10,11])if(!header[i]&&create){sheet.getRange(1,i+1).setValue(INSPECT_HEADERS_[i]);header[i]=INSPECT_HEADERS_[i];}
+ if(!INSPECT_HEADERS_.every((h,i)=>(i>=10&&!header[i])||h===String(header[i]).trim()))throw new Error('หัวตาราง InspectorReviews ไม่ตรงกับระบบ');
  return sheet;
 }
 function inspectionMap_(){
- const sheet=inspectionSheet_(false),map=new Map();
+ const sheet=inspectionSheet_(false),map=new Map(),deliveries=deliveryMap_();
  if(sheet&&sheet.getLastRow()>1)sheet.getRange(2,1,sheet.getLastRow()-1,INSPECT_HEADERS_.length).getValues().forEach(row=>{
+  const delivery=deliveries.get(String(row[0]));if(delivery&&(row[11]?String(row[11])!==delivery.requestId:new Date(delivery.submittedAt)>new Date(row[4])))return;
   if(row[0]&&row[5]&&row[6]&&['ผ่าน','ไม่ผ่าน'].includes(String(row[9])))map.set(String(row[0]),{submittedAt:row[4] instanceof Date?row[4].toISOString():String(row[4]),submittedBy:String(row[3]),photo1:String(row[5]),photo2:String(row[6]),verdict:String(row[9]),comment:String(row[10]||'')});
  });
  return map;
@@ -235,7 +236,7 @@ function saveInspection(input,requestId,token){
   const duplicate=previous.find(row=>String(row[7])===requestId);
   if(duplicate){
    if(String(duplicate[0])!==input.recordId||String(duplicate[3])!==email||String(duplicate[8])!==fingerprint)throw new Error('รหัสคำขอเดิมมีข้อมูลเปลี่ยน');
-   const latest=previous.filter(row=>String(row[0])===input.recordId).pop();setInspectionPhotoLinks_(data,index+2,String(latest[5]),String(latest[6]));data.getRange(index+2,14).setValue(String(latest[9]));SpreadsheetApp.flush();return {id:input.recordId,submittedAt:String(latest[4]),submittedBy:String(latest[3]),photo1:String(latest[5]),photo2:String(latest[6]),verdict:String(latest[9]),comment:String(latest[10]||'')};
+   const latest=previous.filter(row=>String(row[0])===input.recordId).pop();setInspectionPhotoLinks_(data,index+2,String(latest[5]),String(latest[6]));data.getRange(index+2,14).setValue((inspectionMap_().get(input.recordId)||{}).verdict||'ส่งมอบงาน');SpreadsheetApp.flush();return {id:input.recordId,submittedAt:String(latest[4]),submittedBy:String(latest[3]),photo1:String(latest[5]),photo2:String(latest[6]),verdict:String(latest[9]),comment:String(latest[10]||'')};
   }
   const folderId=PropertiesService.getScriptProperties().getProperty('PHOTO_FOLDER_ID');if(!folderId)throw new Error('ผู้ดูแลต้องตั้ง PHOTO_FOLDER_ID และแชร์โฟลเดอร์ให้ช่างผู้ควบคุมงาน');
   const folder=DriveApp.getFolderById(folderId),urls=[];
@@ -245,7 +246,7 @@ function saveInspection(input,requestId,token){
    const file=folder.createFile(blob);created.push(file);urls.push(file.getUrl());
   });
   const now=new Date().toISOString(),safe=v=>/^[=+\-@]/.test(String(v))?"'"+v:String(v);
-  const values=[work.id,work.wbs,work.pea,email,now,urls[0],urls[1],requestId,fingerprint,input.verdict,comment];
+  const values=[work.id,work.wbs,work.pea,email,now,urls[0],urls[1],requestId,fingerprint,input.verdict,comment,(deliveryMap_().get(work.id)||{}).requestId||''];
   const range=sheet.getRange(sheet.getLastRow()+1,1,1,INSPECT_HEADERS_.length);range.setNumberFormat('@');range.setValues([values.map(safe)]);
   // Keep files after the durable delivery row; a retry recovers a failed DATA status update.
   created.length=0;

@@ -279,7 +279,8 @@ function openContractJob(id){
  document.getElementById('contractCoords').textContent=coords?'พิกัด '+coords.join(', '):'ไม่มีพิกัด กรุณาให้ผู้สำรวจเพิ่ม Latitude/Longitude';
  const completed=document.getElementById('completedWork');completed.replaceChildren();completed.hidden=!r.delivery;
  if(r.delivery){const text=document.createElement('p');text.textContent='ส่งมอบแล้ว • '+r.delivery.submittedAt+' • '+(r.delivery.submittedBy||'');completed.append(text);appendSavedPhotos(completed,r.id,'delivery',[r.delivery.photo1,r.delivery.photo2],'รูปปฏิบัติงาน');}
- document.getElementById('contractForm').hidden=Boolean(r.delivery);document.getElementById('deliverButton').disabled=!r.pea||!r.wbs;renderContractor();detail.scrollIntoView({behavior:'smooth',block:'start'});
+ if(r.inspection&&r.inspection.verdict==='ไม่ผ่าน'){const edit=document.createElement('button');edit.type='button';edit.className='btn primary';edit.textContent='แก้ไขงาน';edit.onclick=()=>{clearWorkForm();document.getElementById('contractForm').hidden=false;document.getElementById('deliverButton').textContent='ส่งงานแก้ไขเพื่อตรวจใหม่';document.getElementById('contractForm').scrollIntoView({behavior:'smooth'});};completed.append(edit);completed.hidden=false;}
+ document.getElementById('deliverButton').textContent='ส่งมอบงาน';document.getElementById('contractForm').hidden=Boolean(r.delivery);document.getElementById('deliverButton').disabled=!r.pea||!r.wbs;renderContractor();detail.scrollIntoView({behavior:'smooth',block:'start'});
 }
 async function loadWorkPhoto(index,input){
  const token=++workVersions[index];workImages[index]='';const preview=document.getElementById('workPreview'+(index+1));preview.style.display='none';workLoading[index]=Boolean(input.files[0]);
@@ -294,12 +295,12 @@ async function loadWorkPhoto(index,input){
 }
 for(let i=0;i<2;i++)document.getElementById('workPhoto'+(i+1)).onchange=function(){loadWorkPhoto(i,this)};
 document.getElementById('contractForm').onsubmit=async e=>{
- e.preventDefault();if(deliveryBusy)return;const r=records.find(row=>row.id===selectedContractId);if(!r||r.delivery)return;
+ e.preventDefault();if(deliveryBusy)return;const r=records.find(row=>row.id===selectedContractId);if(!r||(r.delivery&&(!r.inspection||r.inspection.verdict!=='ไม่ผ่าน')))return;
  const status=document.getElementById('workStatus');if(workLoading.some(Boolean)||workImages.some(v=>!v)){status.textContent='กรุณารอให้รูปทั้ง 2 รูปพร้อมก่อนส่งมอบ';return;}
  deliveryBusy=true;document.getElementById('deliverButton').disabled=true;document.getElementById('contractWbs').disabled=true;[1,2].forEach(i=>document.getElementById('workPhoto'+i).disabled=true);status.textContent='กำลังบันทึกส่งมอบ…';
  try{
   const result=await rpc('completeContractorWork',{recordId:r.id,photo1:workImages[0],photo2:workImages[1]},deliveryRequestId);
-  r.delivery={submittedAt:result.submittedAt,photo1:result.photo1,photo2:result.photo2};r.surveyResult='ส่งมอบงาน';status.textContent='ส่งมอบสำเร็จ';
+  r.delivery={submittedAt:result.submittedAt,photo1:result.photo1,photo2:result.photo2};r.inspection=null;r.surveyResult='ส่งมอบงาน';status.textContent='ส่งมอบสำเร็จ';
   try{records=await rpc('listPatrol');}catch(error){status.textContent='ส่งมอบสำเร็จ แต่โหลดรายการล่าสุดไม่สำเร็จ';}
   deliveryBusy=false;render();openContractJob(r.id);
  }catch(error){status.textContent='ยังยืนยันส่งมอบไม่ได้: '+error.message+' กรุณาลองส่งซ้ำด้วยรูปเดิม';}
