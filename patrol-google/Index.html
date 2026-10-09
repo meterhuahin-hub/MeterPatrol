@@ -59,12 +59,15 @@ function build(id,arr,prefix){document.getElementById(id).innerHTML=arr.map(x=>{
 document.getElementById('oldCab').innerHTML=quantityButtons('ตู้','old_cab',[1,2,3,4]);
 build('oldBolts',fields.oldBolts,'old_bolt');build('oldWire',fields.oldWire,'old_wire');build('newBolts',fields.newBolts,'new_bolt');build('wood',fields.wood,'wood');build('newWire',fields.newWire,'new_wire');
 function materialPreset(phase,poleSize,machine){
- if(!['5(15) 1 เฟส','15(45) 1 เฟส','5(100) 1 เฟส'].includes(phase)||!['เสา 8-9','เสา 12','เสา 12.20','เสา 14','เสา 14.20'].includes(poleSize))return null;
- const match=/^เครื่องที่ ([1-8])$/.exec(machine);if(!match)return null;const n=Number(match[1]),values={new_wire_2x10:7};
- if(n===1){Object.assign(values,{new_bolt_แหวน:8,wood_20:2,wood_60:1});Object.assign(values,['เสา 14','เสา 14.20'].includes(poleSize)?{new_bolt_12in:1,new_bolt_14in:3}:['เสา 12','เสา 12.20'].includes(poleSize)?{new_bolt_10in:1,new_bolt_12in:3}:{new_bolt_8in:1,new_bolt_10in:3});}
- if(n===3||n===7)values.wood_120=1;
- if(n===5)Object.assign(values,{wood_20:2,wood_60:1});
- return values;
+ const poles={'เสา 8-9':[8,10],'เสา 12':[10,12],'เสา 12.20':[10,12],'เสา 14':[12,14],'เสา 14.20':[12,14]},bolts=poles[poleSize];if(!bolts)return null;
+ const match=/^เครื่องที่ ([1-8])$/.exec(machine);if(!match)return null;const n=Number(match[1]);
+ const single10=['5(15) 1 เฟส','15(45) 1 เฟส','5(100) 1 เฟส'].includes(phase),single50=['30(100) 1 เฟส','5(100) 1 เฟส สาย 50'].includes(phase),three10=phase==='15(45) 3 เฟส',three50=['30(100) 3 เฟส','5(100) 3 เฟส สาย 50'].includes(phase);
+ if(!single10&&!single50&&!three10&&!three50)return null;const three=three10||three50;if(three&&n>2)return null;
+ const values={[(single50||three50)?'new_wire_50':'new_wire_2x10']:three?(three50?32:16):(single50?14:7)};
+ if(n===1)Object.assign(values,{['new_bolt_'+bolts[0]+'in']:1,['new_bolt_'+bolts[1]+'in']:three?5:3,new_bolt_แหวน:three?12:8,wood_20:2,wood_60:three?2:1});
+ if(three&&n===2)values.wood_60=1;
+ if(!three&&(n===3||n===7))values.wood_120=1;
+ if(!three&&n===5)Object.assign(values,{wood_20:2,wood_60:1});return values;
 }
 function applyMaterialPreset(){const values=materialPreset(document.getElementById('phase').value,document.getElementById('poleSize').value,document.getElementById('machine').value),status=document.getElementById('materialAutoStatus');if(!values){status.textContent='ยังไม่มีสูตรสำหรับชุดที่เลือก จำนวนพัสดุที่กรอกไว้ยังอยู่';return;}const inputs=[...document.querySelectorAll('.section-new [data-key]')];if(inputs.some(input=>Number(input.value)!==0)&&!confirm('เติมพัสดุตามตารางใหม่ จะเปลี่ยนจำนวนพัสดุใหม่ที่กรอกไว้ทั้งหมด ต้องการดำเนินการหรือไม่?')){status.textContent='คงจำนวนพัสดุเดิมไว้';return;}inputs.forEach(input=>input.value=String(values[input.dataset.key]||0));status.textContent='เติมพัสดุใหม่ตามตารางแล้ว สามารถแก้จำนวนเพิ่มเติมได้';}
 for(const id of ['phase','poleSize','machine'])document.getElementById(id).addEventListener('change',applyMaterialPreset);
