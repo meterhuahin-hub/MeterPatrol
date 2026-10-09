@@ -241,12 +241,12 @@ function jobCoordinates(r){
  return Number.isFinite(lat)&&Number.isFinite(lng)&&Math.abs(lat)<=90&&Math.abs(lng)<=180?[lat,lng]:null;
 }
 function changeContractWbs(){if(deliveryBusy)return;selectedContractId='';clearWorkForm();document.getElementById('contractDetail').hidden=true;renderContractor();}
-function workPageRecords(prefix){const data=yearRecords(prefix+'Year'),select=document.getElementById(prefix+'Patrol'),previous=select.value,values=[...new Set(data.map(r=>String(r.patrolJob||'').trim()))].sort();select.replaceChildren(new Option('ทุกงาน Patrol',''));values.forEach(v=>select.append(new Option(v||'ไม่ระบุงาน Patrol',JSON.stringify(v))));select.value=values.some(v=>JSON.stringify(v)===previous)?previous:'';return data.filter(r=>!select.value||String(r.patrolJob||'').trim()===JSON.parse(select.value));}
+function workPageRecords(prefix){const data=yearRecords(prefix+'Year'),select=document.getElementById(prefix+'Patrol'),previous=select.value,values=[...new Set(data.map(r=>String(r.patrolJob||'').trim()).filter(Boolean))].sort();select.replaceChildren(new Option('ทุกงาน Patrol',''));values.forEach(v=>select.append(new Option(v,JSON.stringify(v))));select.value=values.some(v=>JSON.stringify(v)===previous)?previous:'';return data.filter(r=>!select.value||String(r.patrolJob||'').trim()===JSON.parse(select.value));}
 function renderContractor(){
  updateYearSelect('contractYear');
  const select=document.getElementById('contractWbs'),previous=select.value;
  const groups=[...new Set(workPageRecords('contract').map(r=>String(r.wbs||'').trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'th',{numeric:true}));
- select.replaceChildren(new Option('ทุก WBS / รวมงาน Patrol',''));groups.forEach(wbs=>select.add(new Option(`${wbs} (${workPageRecords('contract').filter(r=>String(r.wbs||'').trim()===wbs).length} งาน)`,wbs)));select.value=groups.includes(previous)?previous:'';
+ select.replaceChildren(new Option('ทุก WBS',''));groups.forEach(wbs=>select.add(new Option(`${wbs} (${workPageRecords('contract').filter(r=>String(r.wbs||'').trim()===wbs).length} งาน)`,wbs)));select.value=groups.includes(previous)?previous:'';
  const jobs=workPageRecords('contract').filter(r=>!select.value||String(r.wbs||'').trim()===select.value);
  const missing=workPageRecords('contract').filter(r=>!String(r.wbs||'').trim()).length,done=jobs.filter(r=>r.delivery).length;
  document.getElementById('contractSummary').textContent=`${jobs.length} งาน • ส่งมอบแล้ว ${done} • ไม่มีพิกัด ${jobs.filter(r=>!jobCoordinates(r)).length}`;
@@ -329,7 +329,7 @@ function renderInspector(){
  updateYearSelect('inspectYear');
  const select=document.getElementById('inspectWbs'),previous=select.value;
  const groups=[...new Set(workPageRecords('inspect').map(r=>String(r.wbs||'').trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'th',{numeric:true}));
- select.replaceChildren(new Option('ทุก WBS / รวมงาน Patrol',''));groups.forEach(wbs=>select.add(new Option(`${wbs} (${workPageRecords('inspect').filter(r=>String(r.wbs||'').trim()===wbs).length} งาน)`,wbs)));select.value=groups.includes(previous)?previous:'';
+ select.replaceChildren(new Option('ทุก WBS',''));groups.forEach(wbs=>select.add(new Option(`${wbs} (${workPageRecords('inspect').filter(r=>String(r.wbs||'').trim()===wbs).length} งาน)`,wbs)));select.value=groups.includes(previous)?previous:'';
  const jobs=workPageRecords('inspect').filter(r=>!select.value||String(r.wbs||'').trim()===select.value);
  const missing=workPageRecords('inspect').filter(r=>!String(r.wbs||'').trim()).length,done=jobs.filter(r=>r.inspection).length;
  document.getElementById('inspectSummary').textContent=`${jobs.length} งาน • ตรวจแล้ว ${done} • ไม่มีพิกัด ${jobs.filter(r=>!jobCoordinates(r)).length}`;
