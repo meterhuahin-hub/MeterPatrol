@@ -151,11 +151,11 @@ function completeContractorWork(input,requestId,token){
  const fingerprint=Utilities.base64Encode(Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256,JSON.stringify([input.recordId,photos])));
  const lock=LockService.getScriptLock();lock.waitLock(30000);const created=[];
  try{
-  const data=sheet_(),rows=data.getLastRow()>1?data.getRange(2,1,data.getLastRow()-1,HEADERS_.length).getValues():[];
+  const data=sheet_(),rows=data.getLastRow()>1?data.getRange(2,1,data.getLastRow()-1,50).getValues():[];
   const index=rows.findIndex(row=>String(row[0])===input.recordId);
   if(index<0)throw new Error('ไม่พบงานสำรวจใน DATA กรุณาโหลดข้อมูลใหม่');
   if(rows.filter(row=>String(row[0])===input.recordId).length!==1)throw new Error('Record ID ซ้ำใน DATA กรุณาให้ผู้ดูแลตรวจสอบ');
-  const work=readRow_(rows[index]);if(!work.wbs.trim()||!work.pea.trim())throw new Error('งานนี้ไม่มี WBS หรือ PEA กรุณาให้ผู้สำรวจเติมข้อมูลก่อน');
+  const work=readRow_(rows[index]);if((!work.wbs.trim()&&!work.patrolJob.trim())||!work.pea.trim())throw new Error('งานนี้ต้องมี WBS หรืองาน Patrol และ PEA');
   const sheet=workSheet_(true),previous=sheet.getLastRow()>1?sheet.getRange(2,1,sheet.getLastRow()-1,WORK_HEADERS_.length).getValues():[];
   const duplicate=previous.find(row=>String(row[7])===requestId);
   if(duplicate){
@@ -230,11 +230,11 @@ function saveInspection(input,requestId,token){
  const fingerprint=Utilities.base64Encode(Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256,JSON.stringify(comment?[input.recordId,photos,input.verdict,comment]:[input.recordId,photos,input.verdict])));
  const lock=LockService.getScriptLock();lock.waitLock(30000);const created=[];
  try{
-  const data=sheet_(),rows=data.getLastRow()>1?data.getRange(2,1,data.getLastRow()-1,HEADERS_.length).getValues():[];
+  const data=sheet_(),rows=data.getLastRow()>1?data.getRange(2,1,data.getLastRow()-1,50).getValues():[];
   const index=rows.findIndex(row=>String(row[0])===input.recordId);
   if(index<0)throw new Error('ไม่พบงานสำรวจใน DATA กรุณาโหลดข้อมูลใหม่');
   if(rows.filter(row=>String(row[0])===input.recordId).length!==1)throw new Error('Record ID ซ้ำใน DATA กรุณาให้ผู้ดูแลตรวจสอบ');
-  const work=readRow_(rows[index]);if(!work.wbs.trim()||!work.pea.trim())throw new Error('งานนี้ไม่มี WBS หรือ PEA กรุณาให้ผู้สำรวจเติมข้อมูลก่อน');
+  const work=readRow_(rows[index]);if((!work.wbs.trim()&&!work.patrolJob.trim())||!work.pea.trim())throw new Error('งานนี้ต้องมี WBS หรืองาน Patrol และ PEA');
   const sheet=inspectionSheet_(true),previous=sheet.getLastRow()>1?sheet.getRange(2,1,sheet.getLastRow()-1,INSPECT_HEADERS_.length).getValues():[];
   const duplicate=previous.find(row=>String(row[7])===requestId);
   if(duplicate){
