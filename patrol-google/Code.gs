@@ -1,5 +1,5 @@
 const SPREADSHEET_ID_='1DydK1q8PZELyk2gTFmtxxiUtgSz6EYxRncw1Ep7JDSg';
-const TEXT_KEYS_=['surveyDate','wbs','poleSize','jobType','latlong','surveyResult','transformer','pole','pea','phase','machine','note'];
+const TEXT_KEYS_=['surveyDate','wbs','poleSize','jobType','latlong','surveyResult','transformer','pole','pea','phase','machine','note','patrolJob','electricityOffice'];
 const NUMBER_KEYS_=["old_bolt_8in", "old_bolt_10in", "old_bolt_12in", "old_bolt_14in", "old_bolt_16in", "old_bolt_18in", "old_bolt_แหวน", "old_wire_สีฟ้า", "old_wire_สีดำ", "old_wire_2x6", "old_wire_2x10", "old_wire_25", "old_wire_50", "new_bolt_8in", "new_bolt_10in", "new_bolt_12in", "new_bolt_14in", "new_bolt_16in", "new_bolt_18in", "new_bolt_แหวน", "wood_20", "wood_60", "wood_120", "new_wire_2x10", "new_wire_50", "old_cab", "new_cab"];
 const HEADERS_=["Record ID", "บันทึกเมื่อ", "วันที่", "หมายเลขงาน WBS", "หม้อแปลง TR", "เสาที่", "PEA.", "ขนาด/เฟส", "เครื่อง", "ขนาดเสา", "ประเภทงาน", "Latitude", "Longitude", "ผลสำรวจ", "เก่า-น็อต 8\"", "เก่า-น็อต 10\"", "เก่า-น็อต 12\"", "เก่า-น็อต 14\"", "เก่า-น็อต 16\"", "เก่า-น็อต 18\"", "เก่า-แหวน", "เก่า-สายไฟสีฟ้า", "เก่า-สายไฟสีดำ", "เก่า-สายไฟ 2x6", "เก่า-สายไฟ 2x10", "เก่า-สายไฟ 25", "เก่า-สายไฟ 50", "เก่า-ตู้", "ใหม่-น็อต 8\"", "ใหม่-น็อต 10\"", "ใหม่-น็อต 12\"", "ใหม่-น็อต 14\"", "ใหม่-น็อต 16\"", "ใหม่-น็อต 18\"", "ใหม่-แหวน", "ใหม่-แป้นไม้ 20", "ใหม่-แป้นไม้ 60", "ใหม่-แป้นไม้ 120", "ใหม่-สายไฟ 2x10", "ใหม่-สายไฟ 50", "ใหม่-ตู้", "หมายเหตุ", "รูปก่อน", "รูปหลัง"];
 const DATA_KEYS_=["id", "date", "surveyDate", "wbs", "transformer", "pole", "pea", "phase", "machine", "poleSize", "jobType", "latitude", "longitude", "surveyResult", "old_bolt_8in", "old_bolt_10in", "old_bolt_12in", "old_bolt_14in", "old_bolt_16in", "old_bolt_18in", "old_bolt_แหวน", "old_wire_สีฟ้า", "old_wire_สีดำ", "old_wire_2x6", "old_wire_2x10", "old_wire_25", "old_wire_50", "old_cab", "new_bolt_8in", "new_bolt_10in", "new_bolt_12in", "new_bolt_14in", "new_bolt_16in", "new_bolt_18in", "new_bolt_แหวน", "wood_20", "wood_60", "wood_120", "new_wire_2x10", "new_wire_50", "new_cab", "note", "before", "after"];
@@ -23,6 +23,7 @@ function sheet_(){
  if(!HEADERS_.every((v,i)=>headers[i]===v))throw new Error('หัวตาราง DATA ไม่ตรงกับระบบ ห้ามเขียนทับข้อมูล กรุณาติดต่อผู้ดูแล');
  ensureWorkPhotoColumns_(sheet);
  ensureInspectionPhotoColumns_(sheet);
+ ensureSurveyExtraColumns_(sheet);
  return sheet;
 }
 function ensureWorkPhotoColumns_(sheet){
@@ -51,6 +52,7 @@ function setInspectionPhotoLinks_(sheet,row,photo1,photo2){
 function setWorkPhotoLinks_(sheet,row,photo1,photo2){
  sheet.getRange(row,45,1,2).setValues([[photo1,photo2]]);
 }
+function ensureSurveyExtraColumns_(sheet){const max=sheet.getMaxColumns();if(max<50)sheet.insertColumnsAfter(max,50-max);const range=sheet.getRange(1,49,1,2),header=range.getValues()[0],names=['งาน Patrol','กฟฟ.'];if(header.some((v,i)=>String(v).trim()&&String(v).trim()!==names[i]))throw new Error('คอลัมน์ AW/AX มีหัวตารางอื่น ระบบจะไม่เขียนทับ');if(header.some(v=>!String(v).trim())){if(sheet.getLastRow()>1&&sheet.getRange(2,49,sheet.getLastRow()-1,2).getValues().some(row=>row.some((v,i)=>!String(header[i]).trim()&&v!==''&&v!==null&&v!==undefined)))throw new Error('AW/AX มีข้อมูลแต่ไม่มีหัวตาราง กรุณาตรวจสอบ');range.setValues([names]);}}
 function validate_(input){
  if(!input||typeof input!=='object'||Array.isArray(input))throw new Error('ข้อมูลไม่ถูกต้อง');
  const r={};
@@ -77,12 +79,13 @@ function readRow_(row){
   else if(v instanceof Date){r[key]=key==='surveyDate'?Utilities.formatDate(v,'Asia/Bangkok','yyyy-MM-dd'):v.toISOString();}
   else r[key]=String(v===undefined?'':v);
  });
+ r.patrolJob=String(row[48]||'');r.electricityOffice=String(row[49]||'');
  r.latlong=r.latitude!==''&&r.longitude!==''?r.latitude+','+r.longitude:'';
  return r;
 }
 function listPatrol(token){
  user_(token);const lock=LockService.getScriptLock();lock.waitLock(30000);
- try{const sheet=sheet_();if(sheet.getLastRow()<2)return [];const deliveries=deliveryMap_(),inspections=inspectionMap_();return sheet.getRange(2,1,sheet.getLastRow()-1,HEADERS_.length).getValues().filter(row=>row.some(v=>v!==''&&v!==null)).map(readRow_).map(r=>{const delivery=deliveries.get(r.id);return Object.assign(r,{delivery:delivery||null,inspection:inspections.get(r.id)||null});}).reverse();}
+ try{const sheet=sheet_();if(sheet.getLastRow()<2)return [];const deliveries=deliveryMap_(),inspections=inspectionMap_();return sheet.getRange(2,1,sheet.getLastRow()-1,50).getValues().filter(row=>row.some(v=>v!==''&&v!==null)).map(readRow_).map(r=>{const delivery=deliveries.get(r.id);return Object.assign(r,{delivery:delivery||null,inspection:inspections.get(r.id)||null});}).reverse();}
  finally{lock.releaseLock();}
 }
 function photoName_(pea,key,requestId){
@@ -113,7 +116,7 @@ function savePatrol(input,requestId,token){
   const coords=clean.latlong?clean.latlong.split(',').map(v=>Number(v.trim())):['',''];r.latitude=coords[0];r.longitude=coords[1];
   const values=DATA_KEYS_.map(key=>r[key]);
   const rowIndex=sheet.getLastRow()+1;
-  const range=sheet.getRange(rowIndex,1,1,HEADERS_.length);range.setNumberFormat('@');range.setValues([values.map(safe)]);
+  const range=sheet.getRange(rowIndex,1,1,50);range.setNumberFormat('@');range.setValues([[...values.map(safe),'','','','',safe(clean.patrolJob),safe(clean.electricityOffice)]]);
   // Keep photos once a row has been written, even if adding its audit note fails.
   created.length=0;
   sheet.getRange(rowIndex,1).setNote(JSON.stringify({recordedBy:email,fingerprint}));

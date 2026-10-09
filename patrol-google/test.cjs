@@ -9,9 +9,9 @@ const input={surveyDate:'2026-10-08',wbs:'WBS-01',transformer:'TR001',pea:'00001
 assert.equal(context.listPatrol().length,0);
 const expectedKeys=['old_bolt_8in','old_bolt_10in','old_bolt_12in','old_bolt_14in','old_bolt_16in','old_bolt_18in','old_bolt_แหวน','old_wire_สีฟ้า','old_wire_สีดำ','old_wire_2x6','old_wire_2x10','old_wire_25','old_wire_50','old_cab','new_bolt_8in','new_bolt_10in','new_bolt_12in','new_bolt_14in','new_bolt_16in','new_bolt_18in','new_bolt_แหวน','wood_20','wood_60','wood_120','new_wire_2x10','new_wire_50','new_cab'];
 expectedKeys.forEach((key,i)=>{if(key!=='old_cab'&&key!=='new_cab')input[key]=i+10});
-const id='request-test-123456';context.savePatrol(input,id);context.savePatrol(input,id);assert.equal(rows.length,2);
+input.patrolJob='Patrol test';input.electricityOffice='Office test';const id='request-test-123456';context.savePatrol(input,id);context.savePatrol(input,id);assert.equal(rows.length,2);
 expectedKeys.forEach((key,i)=>assert.equal(rows[1][14+i],input[key],key));
-const r=context.listPatrol()[0];assert.equal(r.pea,'00001');assert.equal(r.old_cab,2);assert.equal(r.new_cab,3);assert.equal(r.note,'=formula');assert.equal(r.latitude,'12.5683');assert.equal(r.longitude,'99.9577');assert.equal(rows[1].length,44);assert.equal(rows[0][0],'Record ID');assert.equal(rows[1][6],'00001');assert.equal(rows[1][27],2);assert.equal(rows[1][40],3);assert.equal(JSON.parse(notes[2]).recordedBy,email);
+const r=context.listPatrol()[0];assert.equal(r.patrolJob,'Patrol test');assert.equal(r.electricityOffice,'Office test');assert.equal(rows[0][48],'งาน Patrol');assert.equal(rows[0][49],'กฟฟ.');assert.equal(r.pea,'00001');assert.equal(r.old_cab,2);assert.equal(r.new_cab,3);assert.equal(r.note,'=formula');assert.equal(r.latitude,'12.5683');assert.equal(r.longitude,'99.9577');assert.equal(rows[1].length,50);assert.equal(rows[0][0],'Record ID');assert.equal(rows[1][6],'00001');assert.equal(rows[1][27],2);assert.equal(rows[1][40],3);assert.equal(JSON.parse(notes[2]).recordedBy,email);
 assert.throws(()=>context.savePatrol({...input,wbs:'changed'},id));
 for(const change of [{surveyDate:'2026-02-30'},{old_cab:-1},{old_cab:NaN},{note:{}},{latlong:'100,20'},{latlong:',20'},{before:'data:image/jpeg;base64,YWJj'}])assert.throws(()=>context.savePatrol({...input,...change},'another-request-12345'));
 assert.equal(rows.length,2);
