@@ -19,5 +19,7 @@ assert.equal(sheets.get('DATA').rows[0][44],'รูปปฏิบัติง�
 sheets.get('DATA').rows[1][44]='';sheets.get('DATA').rows[1][45]='';assert.equal(c.syncContractorPhotos().updated,1);assert.equal(c.syncContractorPhotos().updated,0);assert.equal(sheets.get('DATA').rows[1][44],result.photo1);
 const jobs=c.listPatrol();assert.equal(jobs.find(r=>r.id===input.recordId).delivery.photo1,result.photo1);assert.equal(jobs.find(r=>r.id!==input.recordId).delivery,null);
 assert.throws(()=>c.completeContractorWork(input,'work-request-new123'));assert.throws(()=>c.completeContractorWork({...input,photo1:'data:image/jpeg;base64,YWJk'},'work-request-12345'));assert.equal(files.length,2);
-failWrite=true;assert.throws(()=>c.completeContractorWork({...input,recordId:'survey-request-67890'},'work-request-67890'));assert.ok(files.slice(2).every(f=>f.trashed));assert.equal(sheets.get('DATA').rows[2][13],'');
+failWrite=true;assert.throws(()=>c.completeContractorWork({...input,recordId:'survey-request-67890'},'work-request-67890'));assert.ok(files.slice(2).every(f=>f.trashed));assert.equal(sheets.get('DATA').rows[2][13],'สำรวจ');
 console.log('PASS: two required photos, real job lookup, access checks, durable completion, idempotent retry/recovery, green-status data, original survey photos retained and failed-upload cleanup (Google APIs simulated)');
+
+c.accountSession_=()=>({role:'contractor'});assert.throws(()=>c.savePatrol({wbs:'denied'},'denied-request-12345'),/สิทธิ์ผู้รับจ้าง/);assert.throws(()=>c.saveInspection({},'denied-review-12345'),/สิทธิ์ผู้รับจ้าง/);console.log('PASS: contractor cannot create survey records or submit inspections');

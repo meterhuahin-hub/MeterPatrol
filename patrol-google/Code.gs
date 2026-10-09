@@ -90,6 +90,7 @@ function photoName_(pea,key,requestId){
  return label+'_'+(key==='before'?'ก่อน':'หลัง')+'_'+requestId+'.jpg';
 }
 function savePatrol(input,requestId,token){
+ denyContractor_(token);input=Object.assign({},input,{surveyResult:'สำรวจ'});
  const email=user_(token),clean=validate_(input),photos=photos_(input);
  if(typeof requestId!=='string'||!/^[a-zA-Z0-9-]{16,80}$/.test(requestId))throw new Error('รหัสคำขอไม่ถูกต้อง');
  const fingerprint=Utilities.base64Encode(Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256,JSON.stringify([clean,photos])));
@@ -213,6 +214,7 @@ function inspectionMap_(){
  return map;
 }
 function saveInspection(input,requestId,token){
+ denyContractor_(token);
  const email=user_(token);
  if(!input||!['ผ่าน','ไม่ผ่าน'].includes(input.verdict))throw new Error('ผลตรวจไม่ถูกต้อง');
  if(!input||typeof input!=='object'||typeof input.recordId!=='string'||!input.recordId||input.recordId.length>100)throw new Error('งานไม่ถูกต้อง');
@@ -272,13 +274,15 @@ function syncInspectionPhotos(token){
 
 // Resolve only photo links recorded for this work; never accept arbitrary Drive IDs.
 function getWorkPhoto(recordId,kind,index,token){
- user_(token);if(typeof recordId!=='string'||!['delivery','inspection'].includes(kind)||![1,2].includes(index))throw new Error('คำขอรูปไม่ถูกต้อง');
- const item=(kind==='delivery'?deliveryMap_():inspectionMap_()).get(recordId);
+ user_(token);if(typeof recordId!=='string'||!['delivery','inspection','survey'].includes(kind)||![1,2].includes(index))throw new Error('คำขอรูปไม่ถูกต้อง');
+ const item=kind==='survey'?listPatrol(token).find(r=>r.id===recordId):(kind==='delivery'?deliveryMap_():inspectionMap_()).get(recordId);
  if(!item)throw new Error('ไม่พบรูปของงานนี้');
- const url=item[index===1?'photo1':'photo2'];
+ const url=kind==='survey'?item[index===1?'before':'after']:item[index===1?'photo1':'photo2'];
  const match=/^https:\/\/drive\.google\.com\/file\/d\/([A-Za-z0-9_-]+)(?:\/|$)/.exec(url);
  if(!match)throw new Error('ลิงก์รูปไม่ถูกต้อง');
  const blob=DriveApp.getFileById(match[1]).getBlob(),bytes=blob.getBytes();
  if(blob.getContentType()!=='image/jpeg'||bytes.length>2100000)throw new Error('ไม่สามารถแสดงรูปนี้ในเว็บ กรุณาเปิดลิงก์ Drive');
  return 'data:image/jpeg;base64,'+Utilities.base64Encode(bytes);
 }
+
+function denyContractor_(token){if(accountSession_(token).role==='contractor')throw new Error('สิทธิ์ผู้รับจ้างใช้งานได้เฉพาะส่งมอบงาน');}

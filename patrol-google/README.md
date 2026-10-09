@@ -113,3 +113,8 @@ Session อายุสูงสุด 4 ชั่วโมง อยู่ใ�
 
 `node patrol-google/test-auth.cjs` ตรวจ bcrypt, bootstrap เฉพาะเจ้าของ, session ผูก Google, สิทธิ์ Admin, reset/logout/last-admin/limit (Google APIs จำลอง) ชุดทดสอบงานเดิมแยก mock DI session เพื่อทดสอบ workflow แล้ว Browser mock ทดสอบฟอร์ม login/bootstrap/Admin/มือถือ ไม่ใช่ Google OAuth หรือ deployment จริง
 Bcrypt.gs vendored จาก bcryptjs 2.4.3 ตรวจ SHA512 integrity ของ npm archive และมี BCRYPT-LICENSE.txt
+
+### ประวัติการกรอกและข้อมูลประกอบงาน
+WBS/TR ในหน้าบันทึกงานมีรายการแนะนำจากงานที่บันทึกสำเร็จ เก็บใน localStorage แยก DI และเบราว์เซอร์ สูงสุด 100 ค่าต่อช่อง ปุ่มลบประวัติล้างเฉพาะรายการแนะนำ ไม่ลบ DATA ประวัติงานกรอง WBS และ TR ภายใน WBS ได้
+รูปสำรวจสองช่องแสดงชื่อรูปก่อนดำเนินการ 1/2 แต่ยังใช้คอลัมน์ AQ/AR เดิม รูปเก่าที่เป็นหลังดำเนินการไม่ได้ถูกเปลี่ยนเนื้อหา รูปในหน้าผู้รับจ้าง/ผู้ตรวจอ่านผ่านบัญชี Google ที่มีสิทธิ์ Drive
+ผู้รับจ้างเห็นเฉพาะเมนูผู้รับจ้าง และ server ปฏิเสธ savePatrol/saveInspection สำหรับบทบาท contractor สิทธิ์นี้ไม่ป้องกันผู้มีสิทธิ์แก้ไขชีตหรือสคริปต์โดยตรง
