@@ -24,6 +24,7 @@ function sheet_(){
  ensureWorkPhotoColumns_(sheet);
  ensureInspectionPhotoColumns_(sheet);
  ensureSurveyExtraColumns_(sheet);
+ ensureDeletedColumn_(sheet);
  return sheet;
 }
 function ensureWorkPhotoColumns_(sheet){
@@ -85,7 +86,7 @@ function readRow_(row){
 }
 function listPatrol(token){
  user_(token);const lock=LockService.getScriptLock();lock.waitLock(30000);
- try{const sheet=sheet_();if(sheet.getLastRow()<2)return [];const deliveries=deliveryMap_(),inspections=inspectionMap_();return sheet.getRange(2,1,sheet.getLastRow()-1,50).getValues().filter(row=>row.some(v=>v!==''&&v!==null)).map(readRow_).map(r=>{const delivery=deliveries.get(r.id);return Object.assign(r,{delivery:delivery||null,inspection:inspections.get(r.id)||null});}).reverse();}
+ try{const sheet=sheet_();if(sheet.getLastRow()<2)return [];const deliveries=deliveryMap_(),inspections=inspectionMap_();return sheet.getRange(2,1,sheet.getLastRow()-1,51).getValues().filter(row=>!row[50]).filter(row=>row.some(v=>v!==''&&v!==null)).map(readRow_).map(r=>{const delivery=deliveries.get(r.id);return Object.assign(r,{delivery:delivery||null,inspection:inspections.get(r.id)||null});}).reverse();}
  finally{lock.releaseLock();}
 }
 function photoName_(pea,key,requestId){
@@ -151,9 +152,9 @@ function completeContractorWork(input,requestId,token){
  const fingerprint=Utilities.base64Encode(Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256,JSON.stringify([input.recordId,photos])));
  const lock=LockService.getScriptLock();lock.waitLock(30000);const created=[];
  try{
-  const data=sheet_(),rows=data.getLastRow()>1?data.getRange(2,1,data.getLastRow()-1,50).getValues():[];
+  const data=sheet_(),rows=data.getLastRow()>1?data.getRange(2,1,data.getLastRow()-1,51).getValues():[];
   const index=rows.findIndex(row=>String(row[0])===input.recordId);
-  if(index<0)throw new Error('ไม่พบงานสำรวจใน DATA กรุณาโหลดข้อมูลใหม่');
+  if(index<0||rows[index][50])throw new Error('ไม่พบงานสำรวจ หรือรายการถูกลบแล้ว กรุณาโหลดข้อมูลใหม่');
   if(rows.filter(row=>String(row[0])===input.recordId).length!==1)throw new Error('Record ID ซ้ำใน DATA กรุณาให้ผู้ดูแลตรวจสอบ');
   const work=readRow_(rows[index]);if((!work.wbs.trim()&&!work.patrolJob.trim())||!work.pea.trim())throw new Error('งานนี้ต้องมี WBS หรืองาน Patrol และ PEA');
   const sheet=workSheet_(true),previous=sheet.getLastRow()>1?sheet.getRange(2,1,sheet.getLastRow()-1,WORK_HEADERS_.length).getValues():[];
@@ -230,9 +231,9 @@ function saveInspection(input,requestId,token){
  const fingerprint=Utilities.base64Encode(Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256,JSON.stringify(comment?[input.recordId,photos,input.verdict,comment]:[input.recordId,photos,input.verdict])));
  const lock=LockService.getScriptLock();lock.waitLock(30000);const created=[];
  try{
-  const data=sheet_(),rows=data.getLastRow()>1?data.getRange(2,1,data.getLastRow()-1,50).getValues():[];
+  const data=sheet_(),rows=data.getLastRow()>1?data.getRange(2,1,data.getLastRow()-1,51).getValues():[];
   const index=rows.findIndex(row=>String(row[0])===input.recordId);
-  if(index<0)throw new Error('ไม่พบงานสำรวจใน DATA กรุณาโหลดข้อมูลใหม่');
+  if(index<0||rows[index][50])throw new Error('ไม่พบงานสำรวจ หรือรายการถูกลบแล้ว กรุณาโหลดข้อมูลใหม่');
   if(rows.filter(row=>String(row[0])===input.recordId).length!==1)throw new Error('Record ID ซ้ำใน DATA กรุณาให้ผู้ดูแลตรวจสอบ');
   const work=readRow_(rows[index]);if((!work.wbs.trim()&&!work.patrolJob.trim())||!work.pea.trim())throw new Error('งานนี้ต้องมี WBS หรืองาน Patrol และ PEA');
   const sheet=inspectionSheet_(true),previous=sheet.getLastRow()>1?sheet.getRange(2,1,sheet.getLastRow()-1,INSPECT_HEADERS_.length).getValues():[];
@@ -292,3 +293,6 @@ function getWorkPhoto(recordId,kind,index,token){
 }
 
 function denyContractor_(token){if(accountSession_(token).role==='contractor')throw new Error('สิทธิ์ผู้รับจ้างใช้งานได้เฉพาะส่งมอบงาน');}
+
+function ensureDeletedColumn_(sheet){const max=sheet.getMaxColumns();if(max<51)sheet.insertColumnsAfter(max,51-max);const cell=sheet.getRange(1,51),header=String(cell.getValues()[0][0]||'').trim();if(header&&header!=='ข้อมูลการลบ')throw new Error('คอลัมน์ AY มีหัวตารางอื่น ระบบจะไม่เขียนทับ');if(!header){if(sheet.getLastRow()>1&&sheet.getRange(2,51,sheet.getLastRow()-1,1).getValues().some(row=>row[0]!==''&&row[0]!==null&&row[0]!==undefined))throw new Error('AY มีข้อมูลแต่ไม่มีหัวตาราง กรุณาตรวจสอบ');cell.setValues([['ข้อมูลการลบ']]);}}
+function deletePatrol(recordId,token){const account=admin_(token),email=googleUser_();if(typeof recordId!=='string'||!recordId||recordId.length>100)throw new Error('รหัสงานไม่ถูกต้อง');const lock=LockService.getScriptLock();lock.waitLock(30000);try{admin_(token);const sheet=sheet_(),rows=sheet.getLastRow()>1?sheet.getRange(2,1,sheet.getLastRow()-1,51).getValues():[],matches=rows.map((row,i)=>({row,index:i})).filter(item=>String(item.row[0])===recordId);if(matches.length!==1)throw new Error('ไม่พบงานหรือ Record ID ซ้ำ กรุณาตรวจสอบ');const item=matches[0];if(!item.row[50])sheet.getRange(item.index+2,51).setValue(JSON.stringify({deletedAt:new Date().toISOString(),deletedBy:email,di:account.di}));SpreadsheetApp.flush();return {id:recordId};}finally{lock.releaseLock();}}
