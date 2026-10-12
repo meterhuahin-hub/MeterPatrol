@@ -11,7 +11,7 @@ function googleUser_(){
 }
 function user_(token){accountSession_(token);return googleUser_();}
 function doGet(){
- try{googleUser_();return HtmlService.createTemplateFromFile('Index').evaluate().setTitle('งานปรับปรุง WBS').addMetaTag('viewport','width=device-width, initial-scale=1');}
+ try{googleUser_();return HtmlService.createTemplateFromFile('Index').evaluate().setTitle('งานปรับปรุง WBS และงาน Patrol').addMetaTag('viewport','width=device-width, initial-scale=1');}
  catch(e){return HtmlService.createHtmlOutput('<h1>งานปรับปรุง WBS</h1><p>กรุณาใช้บัญชี Google ที่ผู้ดูแลอนุญาต และตรวจการตั้งค่า deployment</p>');}
 }
 function include_(name){return HtmlService.createHtmlOutputFromFile(name).getContent();}
@@ -215,7 +215,7 @@ function inspectionMap_(){
  const sheet=inspectionSheet_(false),map=new Map(),deliveries=deliveryMap_();
  if(sheet&&sheet.getLastRow()>1)sheet.getRange(2,1,sheet.getLastRow()-1,INSPECT_HEADERS_.length).getValues().forEach(row=>{
   const delivery=deliveries.get(String(row[0]));if(delivery&&(row[11]?String(row[11])!==delivery.requestId:new Date(delivery.submittedAt)>new Date(row[4])))return;
-  if(row[0]&&row[5]&&row[6]&&['ผ่าน','ไม่ผ่าน'].includes(String(row[9])))map.set(String(row[0]),{submittedAt:row[4] instanceof Date?row[4].toISOString():String(row[4]),submittedBy:String(row[3]),photo1:String(row[5]),photo2:String(row[6]),verdict:String(row[9]),comment:String(row[10]||'')});
+  if(row[0]&&['ผ่าน','ไม่ผ่าน'].includes(String(row[9])))map.set(String(row[0]),{submittedAt:row[4] instanceof Date?row[4].toISOString():String(row[4]),submittedBy:String(row[3]),photo1:String(row[5]),photo2:String(row[6]),verdict:String(row[9]),comment:String(row[10]||'')});
  });
  return map;
 }
@@ -227,7 +227,7 @@ function saveInspection(input,requestId,token){
  if(typeof requestId!=='string'||!/^[a-zA-Z0-9-]{16,80}$/.test(requestId))throw new Error('รหัสคำขอไม่ถูกต้อง');
  const comment=input.comment===undefined?'':input.comment;if(typeof comment!=='string'||comment.length>2000)throw new Error('หมายเหตุการตรวจรับต้องไม่เกิน 2000 ตัวอักษร');
  const photos=photos_({before:input.photo1,after:input.photo2});
- if(!photos.before||!photos.after)throw new Error('กรุณาแนบรูปตรวจรับงานให้ครบ 2 รูป');
+
  const fingerprint=Utilities.base64Encode(Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256,JSON.stringify(comment?[input.recordId,photos,input.verdict,comment]:[input.recordId,photos,input.verdict])));
  const lock=LockService.getScriptLock();lock.waitLock(30000);const created=[];
  try{
@@ -242,10 +242,10 @@ function saveInspection(input,requestId,token){
    if(String(duplicate[0])!==input.recordId||String(duplicate[3])!==email||String(duplicate[8])!==fingerprint)throw new Error('รหัสคำขอเดิมมีข้อมูลเปลี่ยน');
    const latest=previous.filter(row=>String(row[0])===input.recordId).pop();setInspectionPhotoLinks_(data,index+2,String(latest[5]),String(latest[6]));data.getRange(index+2,14).setValue((inspectionMap_().get(input.recordId)||{}).verdict||'ส่งมอบงาน');SpreadsheetApp.flush();return {id:input.recordId,submittedAt:String(latest[4]),submittedBy:String(latest[3]),photo1:String(latest[5]),photo2:String(latest[6]),verdict:String(latest[9]),comment:String(latest[10]||'')};
   }
-  const folderId=PropertiesService.getScriptProperties().getProperty('PHOTO_FOLDER_ID');if(!folderId)throw new Error('ผู้ดูแลต้องตั้ง PHOTO_FOLDER_ID และแชร์โฟลเดอร์ให้ช่างผู้ควบคุมงาน');
-  const folder=DriveApp.getFolderById(folderId),urls=[];
+  const folderId=PropertiesService.getScriptProperties().getProperty('PHOTO_FOLDER_ID');if((photos.before||photos.after)&&!folderId)throw new Error('ผู้ดูแลต้องตั้ง PHOTO_FOLDER_ID และแชร์โฟลเดอร์ให้ช่างผู้ควบคุมงาน');
+  const folder=(photos.before||photos.after)?DriveApp.getFolderById(folderId):null,urls=[];
   const label=work.pea.replace(/[\\/:*?"<>|\x00-\x1f\x7f]/g,'_').slice(0,100);
-  [photos.before,photos.after].forEach((image,i)=>{
+  [photos.before,photos.after].forEach((image,i)=>{if(!image){urls.push('');return;}
    const blob=Utilities.newBlob(Utilities.base64Decode(image.split(',')[1]),'image/jpeg',label+'_ตรวจรับ'+(i+1)+'_'+requestId+'.jpg');
    const file=folder.createFile(blob);created.push(file);urls.push(file.getUrl());
   });
