@@ -3,7 +3,7 @@ const ACCOUNT_PREFIX_='account:';
 function accountKey_(di){return ACCOUNT_PREFIX_+di;}
 function validDi_(di){if(typeof di!=='string'||!/^[A-Za-z0-9_.-]{1,64}$/.test(di))throw new Error('DI ใช้ตัวอักษรอังกฤษ ตัวเลข _ . - ได้ไม่เกิน 64 ตัว');return di;}
 function accounts_(){const props=PropertiesService.getScriptProperties().getProperties();return Object.keys(props).filter(key=>key.startsWith(ACCOUNT_PREFIX_)).map(key=>JSON.parse(props[key]));}
-function publicAccount_(a){return {di:a.di,name:a.name,position:a.position,role:a.role,active:a.active};}
+function publicAccount_(a){return {di:a.di,name:a.name,position:a.position,role:a.role,active:a.active,workTypes:a.workTypes||['wbs','patrol']};}
 function bcrypt_(){if(typeof dcodeIO==='undefined'||!dcodeIO.bcrypt)throw new Error('กรุณาเพิ่มไฟล์สคริปต์ Bcrypt ก่อน');const b=dcodeIO.bcrypt;b.setRandomFallback(length=>{const bytes=[];while(bytes.length<length){const hex=Utilities.getUuid().replace(/-/g,'');for(let i=0;i<hex.length;i+=2)bytes.push(parseInt(hex.slice(i,i+2),16));}return bytes.slice(0,length);});return b;}
 function passwordHash_(password){if(typeof password!=='string'||password.length===0||Utilities.newBlob(password).getBytes().length>72)throw new Error('กรุณากรอก pass ไม่เกิน 72 ไบต์');return bcrypt_().hashSync(password,10);}
 function digest_(text){return Utilities.base64EncodeWebSafe(Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256,text));}
@@ -13,7 +13,7 @@ function bootstrapAdmin(input){
  const email=googleUser_(),lock=LockService.getScriptLock();lock.waitLock(30000);
  try{if(email!==ownerEmail_()||accounts_().length)throw new Error('เฉพาะเจ้าของชีตสร้าง Admin แรกได้ และสร้างได้ครั้งเดียว');const a=validatedAccount_(input);a.role='admin';a.active=true;a.hash=passwordHash_(input.password);a.revision=Utilities.getUuid();PropertiesService.getScriptProperties().setProperty(accountKey_(a.di),JSON.stringify(a));return publicAccount_(a);}finally{lock.releaseLock();}
 }
-function validatedAccount_(input){if(!input||typeof input!=='object')throw new Error('ข้อมูลผู้ใช้ไม่ถูกต้อง');const di=validDi_(input.di);for(const key of ['name','position'])if(typeof input[key]!=='string'||!input[key].trim()||input[key].length>200)throw new Error('กรุณากรอกชื่อและตำแหน่ง ไม่เกิน 200 ตัวอักษร');return {di,name:input.name.trim(),position:input.position.trim(),role:input.role===undefined||input.role==='user'?'contractor':(['admin','inspector','contractor'].includes(input.role)?input.role:(()=>{throw new Error('สิทธิ์ผู้ใช้ไม่ถูกต้อง');})()),active:input.active!==false};}
+function validatedAccount_(input){if(!input||typeof input!=='object')throw new Error('ข้อมูลผู้ใช้ไม่ถูกต้อง');const di=validDi_(input.di);for(const key of ['name','position'])if(typeof input[key]!=='string'||!input[key].trim()||input[key].length>200)throw new Error('กรุณากรอกชื่อและตำแหน่ง ไม่เกิน 200 ตัวอักษร');return {di,name:input.name.trim(),position:input.position.trim(),role:input.role===undefined||input.role==='user'?'contractor':(['admin','inspector','contractor'].includes(input.role)?input.role:(()=>{throw new Error('สิทธิ์ผู้ใช้ไม่ถูกต้อง');})()),active:input.active!==false,workTypes:validatedWorkTypes_(input.workTypes)};}
 function loginAccount(di,password){
  const email=googleUser_();validDi_(di);if(typeof password!=='string'||password.length>1000)throw new Error('DI หรือ pass ไม่ถูกต้อง');
  const lock=LockService.getScriptLock();lock.waitLock(30000);
@@ -46,9 +46,15 @@ function saveAccount(input,token){
   admin_(token);const props=PropertiesService.getScriptProperties(),a=validatedAccount_(input),old=JSON.parse(props.getProperty(accountKey_(a.di))||'null');
   if(old&&old.role==='admin'&&old.active&&(!a.active||a.role!=='admin')&&!accounts_().some(other=>other.di!==a.di&&other.role==='admin'&&other.active))throw new Error('ต้องเหลือ Admin ที่ใช้งานได้อย่างน้อยหนึ่งคน');
   if(!old&&!input.password)throw new Error('ผู้ใช้ใหม่ต้องมี pass');
-  a.hash=input.password?passwordHash_(input.password):old.hash;a.revision=old&&!input.password?old.revision:Utilities.getUuid();
+  a.hash=input.password?passwordHash_(input.password):old.hash;a.revision=old&&!input.password&&old.role===a.role&&JSON.stringify(old.workTypes||['wbs','patrol'])===JSON.stringify(a.workTypes)?old.revision:Utilities.getUuid();
   props.setProperty(accountKey_(a.di),JSON.stringify(a));return publicAccount_(a);
  }finally{lock.releaseLock();}
 }
 // Editor-only maintenance fallback is restricted to the Google owner/admin bootstrap identity.
 function maintenanceUser_(token){if(token){admin_(token);return googleUser_();}const email=googleUser_();if(email!==ownerEmail_())throw new Error('ต้องใช้บัญชีเจ้าของชีตเพื่อ Run ฟังก์ชันนี้');return email;}
+
+function validatedWorkTypes_(value){if(value===undefined)return ['wbs','patrol'];if(!Array.isArray(value)||!value.length||value.some(v=>!['wbs','patrol'].includes(v)))throw new Error('เลือกงาน WBS หรือ Patrol อย่างน้อยหนึ่งประเภท');return ['wbs','patrol'].filter(v=>value.includes(v));}
+function canAccessWork_(account,record){return account.role!=='contractor'||(account.workTypes||['wbs','patrol']).some(type=>String(type==='wbs'?record.wbs||'':record.patrolJob||'').trim());}
+function listElectricityOffices(token){accountSession_(token);return offices_();}
+function offices_(){return [...new Set(['กฟส.หห.','กฟส.หพล.',...JSON.parse(PropertiesService.getScriptProperties().getProperty('electricity-offices')||'[]')])];}
+function addElectricityOffice(name,token){admin_(token);if(typeof name!=='string'||!name.trim()||name.length>200)throw new Error('กรุณากรอกชื่อ กฟฟ. ไม่เกิน 200 ตัวอักษร');const lock=LockService.getScriptLock();lock.waitLock(30000);try{admin_(token);const names=[...new Set([...offices_(),name.trim()])];PropertiesService.getScriptProperties().setProperty('electricity-offices',JSON.stringify(names));return names;}finally{lock.releaseLock();}}

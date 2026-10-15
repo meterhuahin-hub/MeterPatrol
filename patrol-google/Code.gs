@@ -88,7 +88,7 @@ function readRow_(row){
 }
 function listPatrol(token){
  user_(token);const lock=LockService.getScriptLock();lock.waitLock(30000);
- try{const sheet=sheet_();if(sheet.getLastRow()<2)return [];const deliveries=deliveryMap_(),inspections=inspectionMap_();return sheet.getRange(2,1,sheet.getLastRow()-1,54).getValues().filter(row=>!row[50]).filter(row=>row.some(v=>v!==''&&v!==null)).map(readRow_).map(r=>{const delivery=deliveries.get(r.id);return Object.assign(r,{delivery:delivery||null,inspection:inspections.get(r.id)||null});}).reverse();}
+ try{const sheet=sheet_();if(sheet.getLastRow()<2)return [];const deliveries=deliveryMap_(),inspections=inspectionMap_();return sheet.getRange(2,1,sheet.getLastRow()-1,54).getValues().filter(row=>!row[50]).filter(row=>row.some(v=>v!==''&&v!==null)).map(readRow_).map(r=>{const delivery=deliveries.get(r.id);return Object.assign(r,{delivery:delivery||null,inspection:inspections.get(r.id)||null});}).filter(r=>canAccessWork_(accountSession_(token),r)).reverse();}
  finally{lock.releaseLock();}
 }
 function photoName_(pea,key,requestId){
@@ -146,6 +146,7 @@ function deliveryMap_(){
  return map;
 }
 function completeContractorWork(input,requestId,token){
+ const scopedAccount=accountSession_(token);
  const email=user_(token);
  if(!input||typeof input!=='object'||typeof input.recordId!=='string'||!input.recordId||input.recordId.length>100)throw new Error('งานไม่ถูกต้อง');
  if(typeof requestId!=='string'||!/^[a-zA-Z0-9-]{16,80}$/.test(requestId))throw new Error('รหัสคำขอไม่ถูกต้อง');
@@ -154,11 +155,11 @@ function completeContractorWork(input,requestId,token){
  const fingerprint=Utilities.base64Encode(Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256,JSON.stringify([input.recordId,photos])));
  const lock=LockService.getScriptLock();lock.waitLock(30000);const created=[];
  try{
-  const data=sheet_(),rows=data.getLastRow()>1?data.getRange(2,1,data.getLastRow()-1,51).getValues():[];
+  const data=sheet_(),rows=data.getLastRow()>1?data.getRange(2,1,data.getLastRow()-1,54).getValues():[];
   const index=rows.findIndex(row=>String(row[0])===input.recordId);
   if(index<0||rows[index][50])throw new Error('ไม่พบงานสำรวจ หรือรายการถูกลบแล้ว กรุณาโหลดข้อมูลใหม่');
   if(rows.filter(row=>String(row[0])===input.recordId).length!==1)throw new Error('Record ID ซ้ำใน DATA กรุณาให้ผู้ดูแลตรวจสอบ');
-  const work=readRow_(rows[index]);if((!work.wbs.trim()&&!work.patrolJob.trim())||!work.pea.trim())throw new Error('งานนี้ต้องมี WBS หรืองาน Patrol และ PEA');
+  const work=readRow_(rows[index]);if(!canAccessWork_(scopedAccount,work))throw new Error('ไม่มีสิทธิ์ทำงานประเภทนี้');if((!work.wbs.trim()&&!work.patrolJob.trim())||!work.pea.trim())throw new Error('งานนี้ต้องมี WBS หรืองาน Patrol และ PEA');
   const sheet=workSheet_(true),previous=sheet.getLastRow()>1?sheet.getRange(2,1,sheet.getLastRow()-1,WORK_HEADERS_.length).getValues():[];
   const duplicate=previous.find(row=>String(row[7])===requestId);
   if(duplicate){
@@ -283,7 +284,7 @@ function syncInspectionPhotos(token){
 
 // Resolve only photo links recorded for this work; never accept arbitrary Drive IDs.
 function getWorkPhoto(recordId,kind,index,token){
- user_(token);if(typeof recordId!=='string'||!['delivery','inspection','survey'].includes(kind)||![1,2].includes(index))throw new Error('คำขอรูปไม่ถูกต้อง');
+ user_(token);if(!listPatrol(token).some(r=>r.id===recordId))throw new Error('ไม่พบงานหรือไม่มีสิทธิ์ดูรูป');if(typeof recordId!=='string'||!['delivery','inspection','survey'].includes(kind)||![1,2].includes(index))throw new Error('คำขอรูปไม่ถูกต้อง');
  const item=kind==='survey'?listPatrol(token).find(r=>r.id===recordId):(kind==='delivery'?deliveryMap_():inspectionMap_()).get(recordId);
  if(!item)throw new Error('ไม่พบรูปของงานนี้');
  const url=kind==='survey'?item[index===1?'before':'after']:item[index===1?'photo1':'photo2'];
