@@ -250,7 +250,7 @@ function renderOverview(){
 }
 function clusteredWorkLayer(){return L.markerClusterGroup({maxClusterRadius:45,showCoverageOnHover:false,spiderfyOnMaxZoom:true,spiderfyOnEveryZoom:true,zoomToBoundsOnClick:true,spiderfyDistanceMultiplier:1.7,iconCreateFunction:cluster=>{const count=cluster.getChildCount();return L.divIcon({className:'workCluster',html:'<span>'+count+'</span>',iconSize:[44,44],iconAnchor:[22,22]});}});}
 let historyMap=null,historyLayer=null;
-function historyMarkerDetail(r,type){const status=r.inspection?r.inspection.verdict:r.delivery?'ส่งมอบแล้ว':'สำรวจ';return 'PEA '+(r.pea||'—')+' • '+(type==='patrol'?patrolHistoryDetail(r):'WBS '+(r.wbs||'—')+' • TR '+(r.transformer||'—')+' • '+(r.surveyDate||''))+' • '+status;}
+function historyMarkerDetail(r,type){return 'PEA. '+(r.pea||'—');}
 function renderHistoryMap(items){
  if(document.getElementById('page-history').hidden)return;
  const status=document.getElementById('historyMapStatus');if(typeof L==='undefined'){status.textContent='โหลดแผนที่ไม่ได้ กรุณาดูรายการด้านล่าง';return;}
