@@ -9,7 +9,7 @@ vm.runInContext(fs.readFileSync(__dirname+'/Code.gs','utf8'),c);
 c.canAccessWork_=()=>true;c.accountSession_=()=>({role:"user"});c.maintenanceUser_=()=>c.googleUser_();
 c.savePatrol({surveyDate:'2026-10-08',pea:'00001',wbs:'WBS-A',latlong:'12.5,99.9'},'survey-request-12345');
 const photos={recordId:'survey-request-12345',photo1:'data:image/jpeg;base64,YWJj',photo2:'data:image/jpeg;base64,ZGVm'};
-c.completeContractorWork(photos,'work-request-12345');const data=sheets.get('DATA'),originalLinks=data.rows[1].slice(42,46);
+c.completeContractorWork(photos,'work-request-12345');const data=sheets.get('DATA'),originalLinks=data.rows[1].slice(45,49);
 assert.throws(()=>c.saveInspection({...photos,verdict:'unknown'},'inspect-request-12345'));assert.throws(()=>c.saveInspection({...photos,photo2:'invalid',verdict:'ผ่าน'},'inspect-request-12345'));
 email='outside@example.test';assert.throws(()=>c.saveInspection({...photos,verdict:'ผ่าน'},'inspect-request-12345'));email='contractor@example.test';
 failStatus=true;assert.throws(()=>c.saveInspection({...photos,verdict:'ไม่ผ่าน'},'inspect-request-12345'));assert.equal(sheets.get('InspectorReviews').rows.length,2);assert.equal(files.length,4);
@@ -17,12 +17,12 @@ failStatus=false;c.saveInspection({...photos,verdict:'ไม่ผ่าน'},'i
 assert.ok(files[2].name.startsWith('00001_ตรวจรับ1_'));assert.ok(files[3].name.startsWith('00001_ตรวจรับ2_'));
 c.saveInspection({...photos,verdict:'ผ่าน'},'inspect-request-67890');assert.equal(data.rows[1][13],'ผ่าน');assert.equal(c.listPatrol()[0].inspection.verdict,'ผ่าน');assert.equal(sheets.get('InspectorReviews').rows.length,3);
 const retry=c.saveInspection({...photos,verdict:'ไม่ผ่าน'},'inspect-request-12345');assert.equal(retry.verdict,'ผ่าน');assert.equal(data.rows[1][13],'ผ่าน');assert.equal(files.length,6);
-c.completeContractorWork(photos,'work-request-12345');assert.equal(data.rows[1][13],'ผ่าน');assert.deepEqual(data.rows[1].slice(42,46),originalLinks);
+c.completeContractorWork(photos,'work-request-12345');assert.equal(data.rows[1][13],'ผ่าน');assert.deepEqual(data.rows[1].slice(45,49),originalLinks);
 assert.throws(()=>c.saveInspection({...photos,verdict:'ผ่าน'},'inspect-request-12345'));assert.equal(files.length,6);
 console.log('PASS: authorized two-photo pass/fail, audit history, latest verdict survives old retries, failure recovery, separate inspection photos and delivery links preserved (Google APIs simulated)');
 
-assert.equal(data.rows[0][46],'ดูรูปตรวจรับ 1');assert.equal(data.rows[0][47],'ดูรูปตรวจรับ 2');assert.equal(data.rows[1][46],c.listPatrol()[0].inspection.photo1);assert.equal(data.rows[1][47],c.listPatrol()[0].inspection.photo2);
-data.rows[1][46]='';data.rows[1][47]='';assert.equal(c.syncInspectionPhotos().updated,1);assert.equal(c.syncInspectionPhotos().updated,0);
+assert.equal(data.rows[0][49],'ดูรูปตรวจรับ 1');assert.equal(data.rows[0][50],'ดูรูปตรวจรับ 2');assert.equal(data.rows[1][49],c.listPatrol()[0].inspection.photo1);assert.equal(data.rows[1][50],c.listPatrol()[0].inspection.photo2);
+data.rows[1][49]='';data.rows[1][50]='';assert.equal(c.syncInspectionPhotos().updated,1);assert.equal(c.syncInspectionPhotos().updated,0);
 assert.ok(c.getWorkPhoto(photos.recordId,'inspection',1).startsWith('data:image/jpeg;base64,'));assert.ok(c.getWorkPhoto(photos.recordId,'delivery',2).startsWith('data:image/jpeg;base64,'));assert.throws(()=>c.getWorkPhoto('arbitrary-file-id','inspection',1));assert.throws(()=>c.getWorkPhoto(photos.recordId,'inspection',3));email='outsider@example.test';assert.throws(()=>c.getWorkPhoto(photos.recordId,'inspection',1));
 console.log('PASS: AU/AV inspection links, safe backfill and authorized ledger-only inline image retrieval');
 email='contractor@example.test';const review=c.saveInspection({...photos,verdict:'ไม่ผ่าน',comment:'แก้ไขสายไฟและถ่ายรูปใหม่'},'comment-request-12345');assert.equal(review.comment,'แก้ไขสายไฟและถ่ายรูปใหม่');assert.equal(c.listPatrol()[0].inspection.comment,review.comment);assert.equal(sheets.get('InspectorReviews').rows[0][10],'หมายเหตุการตรวจรับ');assert.throws(()=>c.saveInspection({...photos,verdict:'ไม่ผ่าน',comment:'x'.repeat(2001)},'comment-request-67890'));assert.throws(()=>c.saveInspection({...photos,verdict:'ไม่ผ่าน',comment:'changed'},'comment-request-12345'));console.log('PASS: inspection comments persist and changed retry comments are rejected');
