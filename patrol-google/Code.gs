@@ -11,7 +11,7 @@ function googleUser_(){
 }
 function user_(token){accountSession_(token);return googleUser_();}
 function doGet(){
- try{googleUser_();return HtmlService.createTemplateFromFile('Index').evaluate().setTitle('งานปรับปรุง WBS และงาน Patrol').addMetaTag('viewport','width=device-width, initial-scale=1');}
+ try{googleUser_();return HtmlService.createTemplateFromFile('Index').evaluate().setTitle('งานปรับปรุง WBS และ Patrol').addMetaTag('viewport','width=device-width, initial-scale=1');}
  catch(e){return HtmlService.createHtmlOutput('<h1>งานปรับปรุง WBS</h1><p>กรุณาใช้บัญชี Google ที่ผู้ดูแลอนุญาต และตรวจการตั้งค่า deployment</p>');}
 }
 function include_(name){return HtmlService.createHtmlOutputFromFile(name).getContent();}
