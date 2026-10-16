@@ -413,11 +413,11 @@ function openInspectJob(id){
  const r=records.find(row=>row.id===id);if(!r)return;
  if(id!==selectedInspectId){clearInspectForm();selectedInspectId=id;}
  const detail=document.getElementById('inspectDetail');detail.hidden=false;
- document.getElementById('inspectTitle').textContent='PEA '+(r.pea||'ไม่ระบุ');document.getElementById('inspectInfo').textContent=`WBS ${r.wbs} • TR ${r.transformer||'—'} • เสา ${r.pole||'—'}`;
+ document.getElementById('inspectTitle').textContent='PEA '+(r.pea||'ไม่ระบุ');document.getElementById('inspectInfo').textContent=contractWorkDetail(r,workPageTypes.inspect);document.getElementById('inspectInfo').style.whiteSpace='pre-line';
  const survey=document.getElementById('inspectSurvey');survey.replaceChildren();const noteText=document.createElement('p');noteText.textContent='หมายเหตุ: '+(r.note||'—');survey.append(noteText);if(r.inspection){const review=document.createElement('p');review.textContent='ผลตรวจ: '+r.inspection.verdict+' • หมายเหตุการตรวจรับ: '+(r.inspection.comment||'—');survey.append(review);}appendSavedPhotos(survey,r.id,'survey',[r.before,r.after],'รูปก่อนดำเนินการ');if(r.delivery)appendSavedPhotos(survey,r.id,'delivery',[r.delivery.photo1,r.delivery.photo2],'รูปปฏิบัติงาน');
  const coords=jobCoordinates(r),link=document.getElementById('inspectNavigate');link.hidden=!coords;
  if(coords){link.href='https://www.google.com/maps/dir/?api=1&destination='+encodeURIComponent(coords.join(','))+'&travelmode=driving';link.style.display='inline-block';}else{link.removeAttribute('href');link.style.display='none';}
- document.getElementById('inspectCoords').textContent=coords?'พิกัด '+coords.join(', '):'ไม่มีพิกัด กรุณาให้ผู้สำรวจเพิ่ม Latitude/Longitude';
+ document.getElementById('inspectCoords').hidden=workPageTypes.inspect==='patrol'||(!r.wbs&&Boolean(r.patrolJob));document.getElementById('inspectCoords').textContent=coords?'พิกัด '+coords.join(', '):'ไม่มีพิกัด กรุณาให้ผู้สำรวจเพิ่ม Latitude/Longitude';
  const completed=document.getElementById('completedInspection');completed.replaceChildren();completed.hidden=!r.inspection;
  if(r.inspection){const text=document.createElement('p');text.textContent='ผลตรวจ '+r.inspection.verdict+' • '+r.inspection.submittedAt+' • '+(r.inspection.submittedBy||'')+' • หมายเหตุ: '+(r.inspection.comment||'—');completed.append(text);appendSavedPhotos(completed,r.id,'inspection',[r.inspection.photo1,r.inspection.photo2],'ดูรูปตรวจรับ');}
  document.getElementById('inspectForm').hidden=false;document.getElementById('inspectPassButton').disabled=!r.pea||(!r.wbs&&!r.patrolJob);document.getElementById('inspectFailButton').disabled=!r.pea||(!r.wbs&&!r.patrolJob);renderInspector();detail.scrollIntoView({behavior:'smooth',block:'start'});
