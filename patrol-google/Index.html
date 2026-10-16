@@ -338,12 +338,13 @@ function appendSavedPhotos(container,recordId,kind,urls,label){
  });
 }
 
+function contractWorkDetail(r,type){return type==='patrol'?`งาน Patrol: ${r.patrolJob||'—'} • ชื่อผู้ใช้ไฟ: ${r.customerName||'—'} • CA: ${r.customerCa||'—'} • ที่อยู่: ${r.address||'—'}`:`WBS ${r.wbs||'—'} • TR ${r.transformer||'—'} • เสา ${r.pole||'—'}`;}
 function openContractJob(id){
  if(deliveryBusy)return;
  const r=records.find(row=>row.id===id);if(!r)return;
  if(id!==selectedContractId){clearWorkForm();selectedContractId=id;}
  const detail=document.getElementById('contractDetail');detail.hidden=false;
- document.getElementById('contractTitle').textContent='PEA '+(r.pea||'ไม่ระบุ');document.getElementById('contractInfo').textContent=`WBS ${r.wbs} • TR ${r.transformer||'—'} • เสา ${r.pole||'—'}`;
+ document.getElementById('contractTitle').textContent='PEA '+(r.pea||'ไม่ระบุ');document.getElementById('contractInfo').textContent=contractWorkDetail(r,workPageTypes.contract);
  const survey=document.getElementById('contractSurvey');survey.replaceChildren();const noteText=document.createElement('p');noteText.textContent='หมายเหตุ: '+(r.note||'—');survey.append(noteText);if(r.inspection){const review=document.createElement('p');review.textContent='ผลตรวจ: '+r.inspection.verdict+' • หมายเหตุการตรวจรับ: '+(r.inspection.comment||'—');survey.append(review);}appendSavedPhotos(survey,r.id,'survey',[r.before,r.after],'รูปก่อนดำเนินการ');
  const coords=jobCoordinates(r),link=document.getElementById('contractNavigate');link.hidden=!coords;
  if(coords){link.href='https://www.google.com/maps/dir/?api=1&destination='+encodeURIComponent(coords.join(','))+'&travelmode=driving';link.style.display='inline-block';}else{link.removeAttribute('href');link.style.display='none';}
