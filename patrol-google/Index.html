@@ -351,13 +351,16 @@ function clearWorkForm(){
  workImages=['',''];workVersions=workVersions.map(n=>n+1);workLoading=[false,false];deliveryRequestId=crypto.randomUUID();
  document.getElementById('contractForm').reset();for(let i=1;i<=2;i++){const img=document.getElementById('workPreview'+i);img.removeAttribute('src');img.style.display='none';}document.getElementById('workStatus').textContent='';
 }
+const savedPhotoCache=new Map();let photoCacheGeneration=0;
+function cachedWorkPhotos(recordId,kind,urls){const key=JSON.stringify([photoCacheGeneration,recordId,kind,urls]);if(savedPhotoCache.has(key))return savedPhotoCache.get(key);const promise=rpc('getWorkPhotos',recordId,kind).catch(error=>{if(savedPhotoCache.get(key)===promise)savedPhotoCache.delete(key);throw error;});savedPhotoCache.set(key,promise);while(savedPhotoCache.size>8)savedPhotoCache.delete(savedPhotoCache.keys().next().value);return promise;}
 function appendSavedPhotos(container,recordId,kind,urls,label){
  const gallery=document.createElement('div');gallery.className='savedPhotos';container.append(gallery);
  urls.forEach((url,i)=>{
   if(!/^https:\/\/drive\.google\.com\/file\/d\/[A-Za-z0-9_-]+/.test(url))return;
   const figure=document.createElement('figure'),img=document.createElement('img'),caption=document.createElement('figcaption'),a=document.createElement('a'),status=document.createElement('p');
   img.alt=label+' '+(i+1);img.hidden=true;a.textContent=img.alt;a.href=url;a.target='_blank';a.rel='noopener noreferrer';caption.append(a);status.textContent='กำลังโหลดรูป…';figure.append(img,caption,status);gallery.append(figure);
-  rpc('getWorkPhoto',recordId,kind,i+1).then(data=>{
+  cachedWorkPhotos(recordId,kind,urls).then(images=>{
+   const data=images[i];if(data&&data.error)throw new Error(data.error);
    if(!figure.isConnected)return;
    if(typeof data!=='string'||!/^data:image\/jpeg;base64,[A-Za-z0-9+/]+={0,2}$/.test(data))throw Error('ข้อมูลรูปไม่ถูกต้อง');
    img.onload=()=>{img.hidden=false;status.textContent='';};img.onerror=()=>{status.textContent='แสดงรูปไม่ได้ กดลิงก์เพื่อเปิดใน Drive';};img.src=data;
@@ -492,7 +495,7 @@ document.addEventListener('keydown',e=>{
   if(e.shiftKey&&document.activeElement===first){e.preventDefault();last.focus();}else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first.focus();}
  }
 });
-function showLogin(message=''){
+function showLogin(message=''){savedPhotoCache.clear();photoCacheGeneration++;
  loginToken='';signedAccount=null;sessionStorage.removeItem('patrol-di-session');records=[];reportRecords=[];connected=false;render();
  for(const id of ['completedWork','completedInspection','accountList'])document.getElementById(id).replaceChildren();
  document.getElementById('appShell').hidden=true;document.getElementById('loginGate').hidden=false;document.body.classList.add('auth-pending');setMenuOpen(false);document.getElementById('loginStatus').textContent=message;

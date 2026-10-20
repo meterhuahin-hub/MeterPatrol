@@ -286,17 +286,10 @@ function syncInspectionPhotos(token){
 
 
 // Resolve only photo links recorded for this work; never accept arbitrary Drive IDs.
-function getWorkPhoto(recordId,kind,index,token){
- user_(token);if(!listPatrol(token).some(r=>r.id===recordId))throw new Error('ไม่พบงานหรือไม่มีสิทธิ์ดูรูป');if(typeof recordId!=='string'||!['delivery','inspection','survey'].includes(kind)||![1,2].includes(index))throw new Error('คำขอรูปไม่ถูกต้อง');
- const item=kind==='survey'?listPatrol(token).find(r=>r.id===recordId):(kind==='delivery'?deliveryMap_():inspectionMap_()).get(recordId);
- if(!item)throw new Error('ไม่พบรูปของงานนี้');
- const url=kind==='survey'?item[index===1?'before':'after']:item[index===1?'photo1':'photo2'];
- const match=/^https:\/\/drive\.google\.com\/file\/d\/([A-Za-z0-9_-]+)(?:\/|$)/.exec(url);
- if(!match)throw new Error('ลิงก์รูปไม่ถูกต้อง');
- const blob=DriveApp.getFileById(match[1]).getBlob(),bytes=blob.getBytes();
- if(blob.getContentType()!=='image/jpeg'||bytes.length>2100000)throw new Error('ไม่สามารถแสดงรูปนี้ในเว็บ กรุณาเปิดลิงก์ Drive');
- return 'data:image/jpeg;base64,'+Utilities.base64Encode(bytes);
-}
+function authorizedPhotoUrls_(recordId,kind,token){const account=accountSession_(token);googleUser_();if(typeof recordId!=='string'||!['delivery','inspection','survey'].includes(kind))throw new Error('คำขอรูปไม่ถูกต้อง');const sheet=sheet_(),ids=sheet.getLastRow()>1?sheet.getRange(2,1,sheet.getLastRow()-1,1).getValues():[],matches=ids.map((row,i)=>({id:String(row[0]),index:i})).filter(r=>r.id===recordId);if(matches.length!==1)throw new Error('ไม่พบงานหรือไม่มีสิทธิ์ดูรูป');const row=sheet.getRange(matches[0].index+2,1,1,58).getValues()[0],record=readRow_(row);if(row[53]||!canAccessWork_(account,record))throw new Error('ไม่พบงานหรือไม่มีสิทธิ์ดูรูป');if(kind==='survey')return [record.before,record.after];const item=(kind==='delivery'?deliveryMap_():inspectionMap_()).get(recordId);if(!item)throw new Error('ไม่พบรูปของงานนี้');return [item.photo1,item.photo2];}
+function photoDataFromUrl_(url){const match=/^https:\/\/drive\.google\.com\/file\/d\/([A-Za-z0-9_-]+)(?:\/|$)/.exec(url||'');if(!match)throw new Error('ไม่มีรูปหรือลิงก์รูปไม่ถูกต้อง');const blob=DriveApp.getFileById(match[1]).getBlob(),bytes=blob.getBytes();if(blob.getContentType()!=='image/jpeg'||bytes.length>2100000)throw new Error('ไม่สามารถแสดงรูปนี้ในเว็บ กรุณาเปิดลิงก์ Drive');return 'data:image/jpeg;base64,'+Utilities.base64Encode(bytes);}
+function getWorkPhoto(recordId,kind,index,token){if(![1,2].includes(index))throw new Error('คำขอรูปไม่ถูกต้อง');return photoDataFromUrl_(authorizedPhotoUrls_(recordId,kind,token)[index-1]);}
+function getWorkPhotos(recordId,kind,token){const urls=authorizedPhotoUrls_(recordId,kind,token);return urls.map(url=>{try{return url?photoDataFromUrl_(url):null;}catch(error){return {error:error.message};}});}
 
 function denyContractor_(token){if(accountSession_(token).role==='contractor')throw new Error('สิทธิ์ผู้รับจ้างใช้งานได้เฉพาะส่งมอบงาน');}
 
