@@ -90,8 +90,8 @@ function readRow_(row){
  return r;
 }
 function listPatrol(token){
- user_(token);const lock=LockService.getScriptLock();lock.waitLock(30000);
- try{const sheet=sheet_();if(sheet.getLastRow()<2)return [];const deliveries=deliveryMap_(),inspections=inspectionMap_();return sheet.getRange(2,1,sheet.getLastRow()-1,58).getValues().filter(row=>!row[53]).filter(row=>row.some(v=>v!==''&&v!==null)).map(readRow_).map(r=>{const delivery=deliveries.get(r.id);return Object.assign(r,{delivery:delivery||null,inspection:inspections.get(r.id)||null});}).filter(r=>canAccessWork_(accountSession_(token),r)).reverse();}
+ const account=accountSession_(token);googleUser_();const lock=LockService.getScriptLock();lock.waitLock(30000);
+ try{const sheet=sheet_();if(sheet.getLastRow()<2)return [];const deliveries=deliveryMap_(),inspections=inspectionMap_(deliveries);return sheet.getRange(2,1,sheet.getLastRow()-1,58).getValues().filter(row=>!row[53]).filter(row=>row.some(v=>v!==''&&v!==null)).map(readRow_).map(r=>{const delivery=deliveries.get(r.id);return Object.assign(r,{delivery:delivery||null,inspection:inspections.get(r.id)||null});}).filter(r=>canAccessWork_(account,r)).reverse();}
  finally{lock.releaseLock();}
 }
 function photoName_(pea,key,requestId){
@@ -217,8 +217,8 @@ function inspectionSheet_(create){
  if(!INSPECT_HEADERS_.every((h,i)=>(i>=10&&!header[i])||h===String(header[i]).trim()))throw new Error('หัวตาราง InspectorReviews ไม่ตรงกับระบบ');
  return sheet;
 }
-function inspectionMap_(){
- const sheet=inspectionSheet_(false),map=new Map(),deliveries=deliveryMap_();
+function inspectionMap_(existingDeliveries){
+ const sheet=inspectionSheet_(false),map=new Map(),deliveries=existingDeliveries||deliveryMap_();
  if(sheet&&sheet.getLastRow()>1)sheet.getRange(2,1,sheet.getLastRow()-1,INSPECT_HEADERS_.length).getValues().forEach(row=>{
   const delivery=deliveries.get(String(row[0]));if(delivery&&(row[11]?String(row[11])!==delivery.requestId:new Date(delivery.submittedAt)>new Date(row[4])))return;
   if(row[0]&&['ผ่าน','ไม่ผ่าน'].includes(String(row[9])))map.set(String(row[0]),{submittedAt:row[4] instanceof Date?row[4].toISOString():String(row[4]),submittedBy:String(row[3]),photo1:String(row[5]),photo2:String(row[6]),verdict:String(row[9]),comment:String(row[10]||'')});

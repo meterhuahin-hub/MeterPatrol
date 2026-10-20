@@ -134,13 +134,17 @@ function z(v){return Number(v)||''}
 function escHtml(v){return String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))}
 function showPhoto(i,which){const url=reportRecords[i][which];if(!url)return alert('ไม่มีรูป');if(!/^https:\/\/drive\.google\.com\//.test(url))return alert('ลิงก์รูปไม่ถูกต้อง');window.open(url,'_blank','noopener,noreferrer')}
 function render(){
- renderWelcome();
+ if(!document.getElementById('page-landing').hidden)renderWelcome();
+ if(!document.getElementById('page-home').hidden)renderOverview();
+ if(!document.getElementById('page-history').hidden)renderHistory();
+ if(!document.getElementById('page-contractor').hidden)renderContractor();
+ if(!document.getElementById('page-inspector').hidden)renderInspector();
+ if(document.getElementById('page-report').hidden)return;
  updateYearSelect('reportYear');
- renderOverview();renderHistory();renderContractor();renderInspector();
  updateReportWbs();updateReportTr();
  if(reportMode==='all')reportRecords=reportTypeRecords();
  if(reportMode==='wbs'){const value=document.getElementById('reportWbs').value;reportRecords=value===''?reportTypeRecords():reportTypeRecords().filter(r=>reportKey(r.wbs)===JSON.parse(value));const tr=document.getElementById('reportTr').value;if(tr!==''&&value!=='')reportRecords=reportRecords.filter(r=>reportKey(r.transformer)===JSON.parse(tr));}
- reportRecords=orderedReport(reportRecords.filter(r=>reportTypeRecords().some(item=>item.id===r.id)).filter(r=>yearRecords('reportYear').some(item=>item.id===r.id)));
+ const reportScopeIds=new Set(reportTypeRecords().map(r=>r.id));reportRecords=orderedReport(reportRecords.filter(r=>reportScopeIds.has(r.id)));
  const groupCount=new Set(reportRecords.map(r=>JSON.stringify([reportKey(r.wbs),reportKey(r.transformer)]))).size;
  document.getElementById('reportPrintedScope').textContent=(reportMode==='wbs'&&document.getElementById('reportWbs').value!==''?'WBS '+(JSON.parse(document.getElementById('reportWbs').value)||'ไม่ระบุ WBS'):reportMode==='selected'?'รายงานเฉพาะรายการ':reportMode==='filtered'?'รายงานตามตัวกรองประวัติ':'รายงานทุก WBS')+(reportMode==='wbs'&&document.getElementById('reportTr').value!==''?' • TR '+(JSON.parse(document.getElementById('reportTr').value)||'ไม่ระบุ TR'):'')+' • ปีงบประมาณ ค.ศ. '+(document.getElementById('reportYear').value==='unassigned'?'ยังไม่ระบุ':document.getElementById('reportYear').value||'ทุกปี')+' • '+reportRecords.length+' งาน • '+groupCount+' กลุ่ม TR';
  count.textContent=reportRecords.length;const el=document.getElementById('records');
@@ -213,6 +217,7 @@ function navigate(page){
  document.querySelectorAll('.page').forEach(el=>el.hidden=el.id!=='page-'+(page==='patrol-dashboard'?'home':page==='patrol-survey'?'survey':page));
  document.querySelectorAll('[data-page]').forEach(el=>{if(el.dataset.page===page)el.setAttribute('aria-current','page');else el.removeAttribute('aria-current')});
  if(page==='landing')renderWelcome();
+ if(page==='report')render();
  if(page==='history')setTimeout(()=>renderHistory(),0);
  if(page==='contractor')setTimeout(()=>{renderContractor();if(contractMap)contractMap.invalidateSize()},0);
  if(page==='inspector')setTimeout(()=>{renderInspector();if(inspectMap)inspectMap.invalidateSize()},0);
@@ -319,12 +324,12 @@ function pageTypeRecords(prefix){let type=workPageTypes[prefix];if(!allowedWorkT
 function reportTypeRecords(){const data=pageTypeRecords('report'),select=document.getElementById('reportPatrol'),old=select.value,values=[...new Set(data.map(r=>r.patrolJob).filter(Boolean))].sort();select.replaceChildren(new Option('ทุกงาน Patrol',''));values.forEach(v=>select.append(new Option(v,v)));select.value=values.includes(old)?old:'';return data.filter(r=>workPageTypes.report!=='patrol'||!select.value||r.patrolJob===select.value);}
 function workPageRecords(prefix){const data=pageTypeRecords(prefix),select=document.getElementById(prefix+'Patrol'),previous=select.value,values=[...new Set(data.map(r=>String(r.patrolJob||'').trim()).filter(Boolean))].sort();select.replaceChildren(new Option('ทุกงาน Patrol',''));values.forEach(v=>select.append(new Option(v,JSON.stringify(v))));select.value=values.some(v=>JSON.stringify(v)===previous)?previous:'';return data.filter(r=>!select.value||String(r.patrolJob||'').trim()===JSON.parse(select.value));}
 function renderContractor(){
- updateYearSelect('contractYear');
+ updateYearSelect('contractYear');const pageRecords=workPageRecords('contract');
  const select=document.getElementById('contractWbs'),previous=select.value;
- const groups=[...new Set(workPageRecords('contract').map(r=>String(r.wbs||'').trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'th',{numeric:true}));
- select.replaceChildren(new Option('ทุก WBS',''));groups.forEach(wbs=>select.add(new Option(`${wbs} (${workPageRecords('contract').filter(r=>String(r.wbs||'').trim()===wbs).length} งาน)`,wbs)));select.value=groups.includes(previous)?previous:'';
- const jobs=workPageRecords('contract').filter(r=>!select.value||String(r.wbs||'').trim()===select.value);
- const missing=workPageRecords('contract').filter(r=>!String(r.wbs||'').trim()).length,done=jobs.filter(r=>r.delivery).length;
+ const groups=[...new Set(pageRecords.map(r=>String(r.wbs||'').trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'th',{numeric:true}));
+ select.replaceChildren(new Option('ทุก WBS',''));groups.forEach(wbs=>select.add(new Option(`${wbs} (${pageRecords.filter(r=>String(r.wbs||'').trim()===wbs).length} งาน)`,wbs)));select.value=groups.includes(previous)?previous:'';
+ const jobs=pageRecords.filter(r=>!select.value||String(r.wbs||'').trim()===select.value);
+ const missing=pageRecords.filter(r=>!String(r.wbs||'').trim()).length,done=jobs.filter(r=>r.delivery).length;
  document.getElementById('contractSummary').textContent=`${jobs.length} งาน • ส่งมอบแล้ว ${done} • ไม่มีพิกัด ${jobs.filter(r=>!jobCoordinates(r)).length}`;
  const list=document.getElementById('contractJobs');list.replaceChildren();
  jobs.forEach(r=>{const row=document.createElement('div');row.className='historyRow'+(r.id===selectedContractId?' selectedJob':'');const info=document.createElement('p');info.className='jobStatusText status-'+dashboardState(r);info.textContent=`PEA ${r.pea||'ไม่ระบุ'} • ${workPageTypes.contract==='patrol'?(r.patrolJob||'งาน Patrol'):'เสา '+(r.pole||'—')} • ${r.inspection?r.inspection.verdict:(r.delivery?'ส่งมอบแล้ว':'รอส่งมอบ')}${!jobCoordinates(r)?' • ไม่มีพิกัด':''}`;const button=document.createElement('button');button.textContent='เปิดงาน';button.disabled=deliveryBusy;button.onclick=()=>openContractJob(r.id);row.append(info,button);list.append(row);});
@@ -403,12 +408,12 @@ document.getElementById('contractForm').onsubmit=async e=>{
 
 function changeInspectWbs(){if(inspectionBusy)return;selectedInspectId='';clearInspectForm();document.getElementById('inspectDetail').hidden=true;renderInspector();}
 function renderInspector(){
- updateYearSelect('inspectYear');
+ updateYearSelect('inspectYear');const pageRecords=workPageRecords('inspect');
  const select=document.getElementById('inspectWbs'),previous=select.value;
- const groups=[...new Set(workPageRecords('inspect').map(r=>String(r.wbs||'').trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'th',{numeric:true}));
- select.replaceChildren(new Option('ทุก WBS',''));groups.forEach(wbs=>select.add(new Option(`${wbs} (${workPageRecords('inspect').filter(r=>String(r.wbs||'').trim()===wbs).length} งาน)`,wbs)));select.value=groups.includes(previous)?previous:'';
- const jobs=workPageRecords('inspect').filter(r=>!select.value||String(r.wbs||'').trim()===select.value);
- const missing=workPageRecords('inspect').filter(r=>!String(r.wbs||'').trim()).length,done=jobs.filter(r=>r.inspection).length;
+ const groups=[...new Set(pageRecords.map(r=>String(r.wbs||'').trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'th',{numeric:true}));
+ select.replaceChildren(new Option('ทุก WBS',''));groups.forEach(wbs=>select.add(new Option(`${wbs} (${pageRecords.filter(r=>String(r.wbs||'').trim()===wbs).length} งาน)`,wbs)));select.value=groups.includes(previous)?previous:'';
+ const jobs=pageRecords.filter(r=>!select.value||String(r.wbs||'').trim()===select.value);
+ const missing=pageRecords.filter(r=>!String(r.wbs||'').trim()).length,done=jobs.filter(r=>r.inspection).length;
  document.getElementById('inspectSummary').textContent=`${jobs.length} งาน • ตรวจแล้ว ${done} • ไม่มีพิกัด ${jobs.filter(r=>!jobCoordinates(r)).length}`;
  const list=document.getElementById('inspectJobs');list.replaceChildren();
  jobs.forEach(r=>{const row=document.createElement('div');row.className='historyRow'+(r.id===selectedInspectId?' selectedJob':'');const info=document.createElement('p');info.className='jobStatusText status-'+dashboardState(r);info.textContent=`PEA ${r.pea||'ไม่ระบุ'} • เสา ${r.pole||'—'} • ${r.inspection?r.inspection.verdict:(r.delivery?'ส่งมอบแล้ว':'ยังไม่ตรวจ')}${!jobCoordinates(r)?' • ไม่มีพิกัด':''}`;const button=document.createElement('button');button.textContent='เปิดงาน';button.disabled=inspectionBusy;button.onclick=()=>openInspectJob(r.id);row.append(info,button);list.append(row);});
