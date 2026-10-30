@@ -66,6 +66,7 @@ function validate_(input){
  if(!/^\d{4}-\d{2}-\d{2}$/.test(r.surveyDate)||!Number.isFinite(Date.parse(r.surveyDate))||new Date(r.surveyDate).toISOString().slice(0,10)!==r.surveyDate)throw new Error('วันที่ไม่ถูกต้อง');
  NUMBER_KEYS_.forEach(k=>{const n=input[k]===undefined?0:input[k];if(typeof n!=='number'||!Number.isFinite(n)||n<0||n>1000000)throw new Error('จำนวนพัสดุต้องเป็นตัวเลขตั้งแต่ศูนย์ถึงหนึ่งล้าน');r[k]=n;});
  if(!TEXT_KEYS_.filter(k=>k!=='surveyDate').some(k=>r[k])&&!NUMBER_KEYS_.some(k=>r[k])&&!input.before&&!input.after)throw new Error('กรุณากรอกข้อมูลงานอย่างน้อยหนึ่งช่อง');
+ if(!r.latlong)throw new Error('กรุณาระบุ LatLong ก่อนบันทึกงาน');
  if(r.latlong){const parts=r.latlong.split(',').map(s=>s.trim());const lat=Number(parts[0]),lng=Number(parts[1]);if(parts.length!==2||parts.some(s=>!s)||!Number.isFinite(lat)||!Number.isFinite(lng)||Math.abs(lat)>90||Math.abs(lng)>180)throw new Error('พิกัด Latitude/Longitude ไม่ถูกต้อง');}
  return r;
 }

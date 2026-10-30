@@ -7,8 +7,8 @@ const book={getSheetByName:name=>sheets.get(name)||null,insertSheet:makeSheet};
 const c=vm.createContext({Session:{getActiveUser:()=>({getEmail:()=>email})},PropertiesService:{getScriptProperties:()=>({getProperty:k=>props[k]})},SpreadsheetApp:{openById:()=>book,flush:()=>{}},LockService:{getScriptLock:()=>({waitLock:()=>{},releaseLock:()=>{}})},DriveApp:{getFolderById:id=>{assert.equal(id,'shared-folder');return folder;}},Utilities:{DigestAlgorithm:{SHA_256:'sha256'},computeDigest:(a,t)=>crypto.createHash(a).update(t).digest(),base64Encode:b=>Buffer.from(b).toString('base64'),base64Decode:s=>Buffer.from(s,'base64'),newBlob:(bytes,mime,name)=>({bytes,mime,name})}});
 vm.runInContext(fs.readFileSync(__dirname+'/Code.gs','utf8'),c);
 c.canAccessWork_=()=>true;c.accountSession_=()=>({role:"user"});c.maintenanceUser_=()=>c.googleUser_();
-c.savePatrol({surveyDate:'2026-10-08',pea:'00001',wbs:'WBS-A',latlong:'12.5,99.9'},'survey-request-12345');
-c.savePatrol({surveyDate:'2026-10-08',pea:'00002',wbs:'WBS-A'},'survey-request-67890');
+c.savePatrol({latlong:'12.5,99.8',surveyDate:'2026-10-08',pea:'00001',wbs:'WBS-A',latlong:'12.5,99.9'},'survey-request-12345');
+c.savePatrol({latlong:'12.5,99.8',surveyDate:'2026-10-08',pea:'00002',wbs:'WBS-A'},'survey-request-67890');
 const input={recordId:'survey-request-12345',photo1:'data:image/jpeg;base64,YWJj',photo2:'data:image/jpeg;base64,ZGVm'};
 assert.throws(()=>c.completeContractorWork({...input,photo2:''},'work-request-12345'));assert.equal(files.length,0);
 assert.throws(()=>c.completeContractorWork({...input,recordId:'missing'},'work-request-12345'));
@@ -22,4 +22,4 @@ assert.throws(()=>c.completeContractorWork(input,'work-request-new123'));assert.
 failWrite=true;assert.throws(()=>c.completeContractorWork({...input,recordId:'survey-request-67890'},'work-request-67890'));assert.ok(files.slice(2).every(f=>f.trashed));assert.equal(sheets.get('DATA').rows[2][13],'สำรวจ');
 console.log('PASS: two required photos, real job lookup, access checks, durable completion, idempotent retry/recovery, green-status data, original survey photos retained and failed-upload cleanup (Google APIs simulated)');
 
-c.accountSession_=()=>({role:'contractor'});assert.throws(()=>c.savePatrol({wbs:'denied'},'denied-request-12345'),/สิทธิ์ผู้รับจ้าง/);assert.throws(()=>c.saveInspection({},'denied-review-12345'),/สิทธิ์ผู้รับจ้าง/);console.log('PASS: contractor cannot create survey records or submit inspections');
+c.accountSession_=()=>({role:'contractor'});assert.throws(()=>c.savePatrol({latlong:'12.5,99.8',wbs:'denied'},'denied-request-12345'),/สิทธิ์ผู้รับจ้าง/);assert.throws(()=>c.saveInspection({},'denied-review-12345'),/สิทธิ์ผู้รับจ้าง/);console.log('PASS: contractor cannot create survey records or submit inspections');
