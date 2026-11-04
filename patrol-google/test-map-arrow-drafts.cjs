@@ -1,0 +1,20 @@
+const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
+const source=fs.readFileSync(__dirname+'/Index.html','utf8');
+let calls=0,fail=false;const messages=[];
+const context=vm.createContext({console,Map,JSON,Math,crypto:{randomUUID:()=> 'draft-test-request-12345'},alert:message=>messages.push(message),rpc:async(method,scope,changes)=>{calls++;assert.equal(method,'saveMapArrowPositions');if(fail)throw Error('network');return {positions:changes.map(p=>({...p,revision:'new-revision'}))};}});
+vm.runInContext(`let mapWorkAnnotations={positions:[]};let reportMapKey=JSON.stringify({wbs:'WBS'}),reportMapVersion=1;function reportMapSelectedScope(){return {wbs:'WBS'};}function redrawMapWorkOverlays(){}function updateMapArrowToolbar(){}`,context);
+for(const name of ['mapArrowKey','undoMapArrow','saveMapArrowDrafts'])vm.runInContext(source.split('\n').find(line=>line.startsWith('function '+name+'(')||line.startsWith('async function '+name+'(')),context);
+vm.runInContext('const mapArrowDrafts=new Map();let mapArrowUndo=[],mapArrowSaving=false;',context);
+const run=code=>vm.runInContext(code,context);
+(async()=>{
+run(`mapArrowUndo.push({pageId:'p',recordId:'r',before:{x:.1,y:.2},hadDraft:false});mapArrowDrafts.set(mapArrowKey('p','r'),{pageId:'p',recordId:'r',x:.3,y:.4});`);
+assert.equal(calls,0);run('undoMapArrow()');assert.equal(run('mapArrowDrafts.size'),0);
+run(`mapArrowUndo.push({pageId:'p',recordId:'r',before:{x:.1,y:.2},hadDraft:false});mapArrowDrafts.set(mapArrowKey('p','r'),{pageId:'p',recordId:'r',x:.3,y:.4});`);
+await run('saveMapArrowDrafts()');assert.equal(calls,1);assert.equal(run('mapArrowDrafts.size'),0);assert.equal(run('mapWorkAnnotations.positions[0].x'),.3);
+run('undoMapArrow()');assert.equal(run("mapArrowDrafts.get(mapArrowKey('p','r')).x"),.1);
+fail=true;await run('saveMapArrowDrafts()');assert.equal(run('mapArrowDrafts.size'),1);assert.equal(run('mapWorkAnnotations.positions[0].x'),.3);assert.ok(messages[0].includes('network'));
+fail=false;await run('saveMapArrowDrafts()');assert.equal(run('mapArrowDrafts.size'),0);assert.equal(run('mapWorkAnnotations.positions[0].x'),.1);
+const pointerUp=source.slice(source.indexOf('bubble.onpointerup='),source.indexOf(';}});wrap.append(svg)',source.indexOf('bubble.onpointerup=')));
+assert.ok(!pointerUp.includes('rpc('));assert.match(pointerUp,/mapArrowDrafts.set/);
+console.log('PASS drag stays local, undo before/after save, explicit batch save and network failure preserves drafts');
+})().catch(error=>{console.error(error);process.exit(1);});

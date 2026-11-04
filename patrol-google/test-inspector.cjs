@@ -59,3 +59,21 @@ assert.throws(()=>c.saveMapPoleBinding(mapScope,{group:'แนวถนน',labe
 assert.throws(()=>c.saveMapPoleBinding(mapScope,{group:'แนวถนน',label:'B',tr:'TR-MAP',pole:'2'},'map-binding-stale-12345'),/แก้ไข/);
 c.accountSession_=()=>({role:'contractor'});assert.throws(()=>c.saveMapPoleBinding(mapScope,{group:'แนวถนน',label:'B',tr:'TR-MAP',pole:'1'},'map-binding-denied-12345'),/เฉพาะ/);assert.throws(()=>c.saveMapArrowPosition(mapScope,overlapPage,'map-arrow-work-one-12345',.5,.5,'','map-position-denied-12345'),/เฉพาะ/);
 console.log('PASS map work binding, persistent sequential numbering, same-pole multiple jobs, arrow position persistence, stale-write protection and editor authorization');
+
+c.accountSession_=()=>({role:'inspector'});
+assert.equal(c.mapWorkLabel_('27'),'AA');assert.equal(c.mapWorkLabel_('เสาที่ B'),'B');assert.equal(c.mapWorkLabel_('1/2'),'');
+const autoPages=[{groups:[{name:'TR-A',points:[{label:'A'},{label:'B'}]},{name:'TR-B',points:[{label:'A'}]}]}];
+let autoBindings=c.autoMapPoleBindings_(autoPages,[{transformer:'TR-A',pole:'1'},{transformer:'TR-B',pole:'A'}],[],{tr:''});assert.equal(autoBindings.bindings.length,2);assert.equal(autoBindings.bindings[0].group,'TR-A');
+assert.equal(c.autoMapPoleBindings_(autoPages,[{transformer:'TR-X',pole:'1'}],[],{tr:'TR-X'}).bindings.length,0);
+assert.equal(c.autoMapPoleBindings_([{groups:[{name:'กลุ่ม 1',points:[{label:'A'}]}]}],[{transformer:'TR-A',pole:'1'},{transformer:'TR-A',pole:'A'}],[],{tr:'TR-A'}).bindings.length,0);
+c.savePatrol({surveyDate:'2026-10-20',wbs:'WBS-MAP',transformer:'TR-MAP',pole:'4',budgetYear:'2027',pea:'00444',latlong:'12.5,99.8'},'map-arrow-auto-four-12345');
+annotations=c.getMapWorkAnnotations(mapScope);const automaticJob=annotations.callouts.find(j=>j.id==='map-arrow-auto-four-12345');assert.equal(automaticJob.label,'D');assert.equal(annotations.bindings.find(b=>b.label==='D').automatic,true);
+const fourthPage=c.getReportMapSet(mapScope).pages.find(p=>p.groups.some(g=>g.points.some(point=>point.label==='D'))).pageId;
+const batch=[{pageId:overlapPage,recordId:'map-arrow-work-one-12345',x:.65,y:.55,expectedRevision:'map-position-first-12345'},{pageId:fourthPage,recordId:'map-arrow-auto-four-12345',x:.3,y:.4,expectedRevision:''}];
+const batchSaved=c.saveMapArrowPositions(mapScope,batch,'map-position-batch-12345');assert.equal(batchSaved.positions.length,2);assert.equal(c.getMapWorkAnnotations(mapScope).positions.find(p=>p.recordId==='map-arrow-auto-four-12345').x,.3);
+c.saveMapArrowPositions(mapScope,batch,'map-position-batch-12345');
+const positionsBefore=JSON.stringify(sheets.get('MapArrowPositions').rows);
+assert.throws(()=>c.saveMapArrowPositions(mapScope,[{...batch[1],x:.7,expectedRevision:'map-position-batch-12345'},{...batch[0],x:.1,expectedRevision:'stale'}],'map-position-batch-stale-12345'),/แก้ไข/);assert.equal(JSON.stringify(sheets.get('MapArrowPositions').rows),positionsBefore);
+assert.throws(()=>c.saveMapArrowPositions(mapScope,[{...batch[1],recordId:'not-a-job'}],'map-position-batch-invalid-12345'),/ไม่พบ/);
+c.accountSession_=()=>({role:'contractor'});assert.throws(()=>c.saveMapArrowPositions(mapScope,batch,'map-position-batch-denied-12345'),/เฉพาะ/);
+console.log('PASS automatic E/F pole matching, numeric and letter labels, ambiguous matches excluded, batch saves, safe retries and all-or-nothing stale validation');
