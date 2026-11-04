@@ -1,0 +1,10 @@
+const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm');
+const source=fs.readFileSync(__dirname+'/Index.html','utf8'),context={};vm.createContext(context);
+vm.runInContext(source.match(/function mapWorkAnchor\([^\n]+/)[0],context);
+assert.equal(context.mapWorkAnchor({x:.4,y:.5},1000,2).x,.4);
+assert.equal(context.mapWorkAnchor({x:.4,y:.5},1000,2).y,.474);
+assert.equal(context.mapWorkAnchor({x:0,y:1},1000,0).y,1);
+assert.match(source,/attachMapWorkOverlay\(page,img\)/);
+assert.match(source,/marker-end/);
+assert.match(source,/saveMapArrowPosition/);
+console.log('PASS map arrow anchor aligns with original map area excluding burned group footer');
