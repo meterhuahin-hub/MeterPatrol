@@ -77,3 +77,8 @@ assert.throws(()=>c.saveMapArrowPositions(mapScope,[{...batch[1],x:.7,expectedRe
 assert.throws(()=>c.saveMapArrowPositions(mapScope,[{...batch[1],recordId:'not-a-job'}],'map-position-batch-invalid-12345'),/ไม่พบ/);
 c.accountSession_=()=>({role:'contractor'});assert.throws(()=>c.saveMapArrowPositions(mapScope,batch,'map-position-batch-denied-12345'),/เฉพาะ/);
 console.log('PASS automatic E/F pole matching, numeric and letter labels, ambiguous matches excluded, batch saves, safe retries and all-or-nothing stale validation');
+
+c.accountSession_=()=>({role:'inspector'});
+let directPole=c.getMapWorkAnnotations(mapScope).callouts.find(j=>j.id==='map-arrow-work-one-12345');assert.equal(directPole.label,'A');assert.equal(directPole.pole,'1');const stableDirectNumber=directPole.number;
+const directRow=data.rows.find(r=>r[0]==='map-arrow-work-one-12345');directRow[5]='3';directPole=c.getMapWorkAnnotations(mapScope).callouts.find(j=>j.id==='map-arrow-work-one-12345');assert.equal(directPole.label,'C');assert.equal(directPole.number,stableDirectNumber);assert.equal(directPole.pole,'3');directRow[5]='1';
+console.log('PASS arrow target follows current sheet column F instead of legacy manual binding, and work number remains stable');
