@@ -97,9 +97,9 @@ c.accountSession_=()=>({role:'contractor'});assert.throws(()=>c.saveMapTextAnnot
 console.log('PASS map text CRUD, Unicode multiline round trip, independent pages, idempotency, validation, atomic stale rejection and authorization');
 
 c.accountSession_=()=>({role:'inspector'});
-assert.equal(c.mapWorkLabel_('เมนA'),'A');assert.equal(c.mapWorkLabel_('เมน B'),'B');assert.equal(c.mapWorkLabel_('เมนAA'),'AA');assert.equal(c.mapWorkLabel_('MAIN C'),'C');
+assert.equal(c.mapWorkLabel_('เมนA'),'เมนA');assert.equal(c.mapWorkLabel_('เมน B'),'เมนB');assert.equal(c.mapWorkLabel_('เมนAA'),'เมนAA');assert.equal(c.mapWorkLabel_('MAIN C'),'เมนC');
 c.savePatrol({surveyDate:'2026-10-20',wbs:'WBS-MAP',transformer:'TR-MAP',pole:'เมนA',budgetYear:'2027',pea:'00991',latlong:'12.5,99.8'},'map-main-pole-work-12345');
-const mainJob=c.getMapWorkAnnotations(mapScope).callouts.find(j=>j.id==='map-main-pole-work-12345');assert.equal(mainJob.label,'A');assert.equal(mainJob.pole,'เมนA');assert.ok(c.getMapWorkAnnotations(mapScope).callouts.some(j=>j.pole==='1'&&j.label==='A'));
+assert.ok(!c.getMapWorkAnnotations(mapScope).callouts.some(j=>j.id==='map-main-pole-work-12345'));const mainScope=c.getReportMapSet(mapScope);c.saveReportMap({...mapScope,mapSet:true,baseRevision:mainScope.revision},photos.photo1,'map-main-point-page-12345',[{name:'แนวถนน',color:'#7c3aed',points:[{label:'A',x:.1,y:.1,existing:true},{label:'เมนA',x:.8,y:.8}]}]);const mainJob=c.getMapWorkAnnotations(mapScope).callouts.find(j=>j.id==='map-main-pole-work-12345');assert.equal(mainJob.label,'เมนA');assert.equal(mainJob.pole,'เมนA');assert.ok(c.getMapWorkAnnotations(mapScope).callouts.some(j=>j.pole==='1'&&j.label==='A'));
 assert.equal(c.validatedMapTexts_([textItem])[0].angle,0);assert.equal(c.validatedMapTexts_([{...textItem,angle:-90}])[0].angle,-90);assert.throws(()=>c.validatedMapTexts_([{...textItem,angle:Infinity}]));assert.throws(()=>c.validatedMapTexts_([{...textItem,angle:361}]));
 const rotated={...textItem,angle:45};c.saveMapTextAnnotations(mapScope,[{pageId:overlapPage,items:[rotated],expectedRevision:'map-text-delete-first-12345'}],'map-text-rotate-save-12345');assert.equal(c.getMapTextAnnotations(mapScope).pages.find(p=>p.pageId===overlapPage).items[0].angle,45);
-console.log('PASS main-pole aliases including shared A/เมนA targets, legacy text default rotation, angle validation and persisted rotation');
+console.log('PASS distinct A/เมนA targets and no fallback when main pole is absent, legacy text default rotation, angle validation and persisted rotation');
