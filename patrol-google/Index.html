@@ -85,7 +85,7 @@ function materialPreset(phase,poleSize,machine){
  const poles={'เสา 8-9':[8,10],'เสา 12':[10,12],'เสา 12.20':[10,12],'เสา 14':[12,14],'เสา 14.20':[12,14]},bolts=poles[poleSize];
  const match=/^เครื่องที่ ([1-8])$/.exec(machine);if(!match)return null;const n=Number(match[1]);
  const single10=['5(15) 1 เฟส','15(45) 1 เฟส','5(100) 1 เฟส'].includes(phase),single50=['30(100) 1 เฟส','5(100) 1 เฟส สาย 50'].includes(phase),three10=phase==='15(45) 3 เฟส',three50=['30(100) 3 เฟส','5(100) 3 เฟส สาย 50'].includes(phase);
- if(!single10&&!single50&&!three10&&!three50)return null;const three=three10||three50;if(poleSize==='เมนชายคา'){if(three?n!==1:n>2)return null;return {[three||n===2?'wood_60':'wood_20']:1,[(single50||three50)?'new_wire_50':'new_wire_2x10']:(single50||three50)?16:three?8:4};}if(!bolts)return null;if(three&&n>2)return null;
+ if(!single10&&!single50&&!three10&&!three50)return null;const three=three10||three50;if(poleSize==='เมนชายคา'){if(three?n!==1:n>2)return null;return {[three||n===2?'wood_60':'wood_20']:1,[(single50||three50)?'new_wire_50':'new_wire_2x10']:three50?16:(single50||three10)?8:4};}if(!bolts)return null;if(three&&n>2)return null;
  const values={[(single50||three50)?'new_wire_50':'new_wire_2x10']:three?(three50?32:16):(single50?14:7)};
  if(n===1)Object.assign(values,{['new_bolt_'+bolts[0]+'in']:1,['new_bolt_'+bolts[1]+'in']:three?5:3,new_bolt_แหวน:three?12:8,wood_20:2,wood_60:three?2:1});
  if(three&&n===2)values.wood_60=1;
