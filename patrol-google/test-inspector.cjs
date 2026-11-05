@@ -82,3 +82,16 @@ c.accountSession_=()=>({role:'inspector'});
 let directPole=c.getMapWorkAnnotations(mapScope).callouts.find(j=>j.id==='map-arrow-work-one-12345');assert.equal(directPole.label,'A');assert.equal(directPole.pole,'1');const stableDirectNumber=directPole.number;
 const directRow=data.rows.find(r=>r[0]==='map-arrow-work-one-12345');directRow[5]='3';directPole=c.getMapWorkAnnotations(mapScope).callouts.find(j=>j.id==='map-arrow-work-one-12345');assert.equal(directPole.label,'C');assert.equal(directPole.number,stableDirectNumber);assert.equal(directPole.pole,'3');directRow[5]='1';
 console.log('PASS arrow target follows current sheet column F instead of legacy manual binding, and work number remains stable');
+
+c.accountSession_=()=>({role:'inspector'});
+const textItem={id:'map-text-item-first-12345',text:'เปลี่ยนเสาใหม่\nแนวสายเข้าบ้าน <script>',x:.2,y:.3,size:24,color:'#D71920'};
+const textChange={pageId:overlapPage,items:[textItem],expectedRevision:''};
+c.saveMapTextAnnotations(mapScope,[textChange],'map-text-save-first-12345');let savedTexts=c.getMapTextAnnotations(mapScope);assert.equal(savedTexts.pages[0].items[0].text,textItem.text);assert.equal(savedTexts.pages[0].items[0].color,'#d71920');
+c.saveMapTextAnnotations(mapScope,[textChange],'map-text-save-first-12345');assert.equal(sheets.get('MapTextAnnotations').rows.length,2);
+const secondText={pageId:fourthPage,items:[{...textItem,id:'map-text-item-second-12345'}],expectedRevision:''};
+const beforeTexts=JSON.stringify(sheets.get('MapTextAnnotations').rows);assert.throws(()=>c.saveMapTextAnnotations(mapScope,[secondText,{...textChange,items:[{...textItem,text:'stale change'}]}],'map-text-batch-stale-12345'),/แก้ไข/);assert.equal(JSON.stringify(sheets.get('MapTextAnnotations').rows),beforeTexts);
+c.saveMapTextAnnotations(mapScope,[secondText],'map-text-save-second-12345');assert.equal(c.getMapTextAnnotations(mapScope).pages.length,2);
+c.saveMapTextAnnotations(mapScope,[{pageId:overlapPage,items:[],expectedRevision:'map-text-save-first-12345'}],'map-text-delete-first-12345');assert.equal(c.getMapTextAnnotations(mapScope).pages.find(p=>p.pageId===overlapPage).items.length,0);assert.equal(c.getMapTextAnnotations(mapScope).pages.find(p=>p.pageId===fourthPage).items.length,1);
+assert.throws(()=>c.saveMapTextAnnotations(mapScope,[{pageId:'not-a-page',items:[textItem]}],'map-text-invalid-page-12345'),/ไม่พบ/);assert.throws(()=>c.validatedMapTexts_([{...textItem,x:Infinity}]));assert.throws(()=>c.validatedMapTexts_([{...textItem,color:'red'}]));assert.throws(()=>c.validatedMapTexts_([{...textItem,text:Array(22).fill('a').join('\n')}]));assert.throws(()=>c.validatedMapTexts_([textItem,textItem]));
+c.accountSession_=()=>({role:'contractor'});assert.throws(()=>c.saveMapTextAnnotations(mapScope,[textChange],'map-text-forbidden-12345'),/เฉพาะ/);c.canAccessWork_=()=>false;assert.throws(()=>c.getMapTextAnnotations(mapScope),/สิทธิ์/);c.canAccessWork_=()=>true;
+console.log('PASS map text CRUD, Unicode multiline round trip, independent pages, idempotency, validation, atomic stale rejection and authorization');
