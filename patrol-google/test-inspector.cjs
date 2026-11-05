@@ -65,7 +65,7 @@ assert.equal(c.mapWorkLabel_('27'),'AA');assert.equal(c.mapWorkLabel_('เสา
 const autoPages=[{groups:[{name:'TR-A',points:[{label:'A'},{label:'B'}]},{name:'TR-B',points:[{label:'A'}]}]}];
 let autoBindings=c.autoMapPoleBindings_(autoPages,[{transformer:'TR-A',pole:'1'},{transformer:'TR-B',pole:'A'}],[],{tr:''});assert.equal(autoBindings.bindings.length,2);assert.equal(autoBindings.bindings[0].group,'TR-A');
 assert.equal(c.autoMapPoleBindings_(autoPages,[{transformer:'TR-X',pole:'1'}],[],{tr:'TR-X'}).bindings.length,0);
-assert.equal(c.autoMapPoleBindings_([{groups:[{name:'กลุ่ม 1',points:[{label:'A'}]}]}],[{transformer:'TR-A',pole:'1'},{transformer:'TR-A',pole:'A'}],[],{tr:'TR-A'}).bindings.length,0);
+assert.equal(c.autoMapPoleBindings_([{groups:[{name:'กลุ่ม 1',points:[{label:'A'}]}]}],[{transformer:'TR-A',pole:'1'},{transformer:'TR-A',pole:'A'}],[],{tr:'TR-A'}).bindings.length,2);
 c.savePatrol({surveyDate:'2026-10-20',wbs:'WBS-MAP',transformer:'TR-MAP',pole:'4',budgetYear:'2027',pea:'00444',latlong:'12.5,99.8'},'map-arrow-auto-four-12345');
 annotations=c.getMapWorkAnnotations(mapScope);const automaticJob=annotations.callouts.find(j=>j.id==='map-arrow-auto-four-12345');assert.equal(automaticJob.label,'D');assert.equal(annotations.bindings.find(b=>b.label==='D').automatic,true);
 const fourthPage=c.getReportMapSet(mapScope).pages.find(p=>p.groups.some(g=>g.points.some(point=>point.label==='D'))).pageId;
@@ -95,3 +95,11 @@ c.saveMapTextAnnotations(mapScope,[{pageId:overlapPage,items:[],expectedRevision
 assert.throws(()=>c.saveMapTextAnnotations(mapScope,[{pageId:'not-a-page',items:[textItem]}],'map-text-invalid-page-12345'),/ไม่พบ/);assert.throws(()=>c.validatedMapTexts_([{...textItem,x:Infinity}]));assert.throws(()=>c.validatedMapTexts_([{...textItem,color:'red'}]));assert.throws(()=>c.validatedMapTexts_([{...textItem,text:Array(22).fill('a').join('\n')}]));assert.throws(()=>c.validatedMapTexts_([textItem,textItem]));
 c.accountSession_=()=>({role:'contractor'});assert.throws(()=>c.saveMapTextAnnotations(mapScope,[textChange],'map-text-forbidden-12345'),/เฉพาะ/);c.canAccessWork_=()=>false;assert.throws(()=>c.getMapTextAnnotations(mapScope),/สิทธิ์/);c.canAccessWork_=()=>true;
 console.log('PASS map text CRUD, Unicode multiline round trip, independent pages, idempotency, validation, atomic stale rejection and authorization');
+
+c.accountSession_=()=>({role:'inspector'});
+assert.equal(c.mapWorkLabel_('เมนA'),'A');assert.equal(c.mapWorkLabel_('เมน B'),'B');assert.equal(c.mapWorkLabel_('เมนAA'),'AA');assert.equal(c.mapWorkLabel_('MAIN C'),'C');
+c.savePatrol({surveyDate:'2026-10-20',wbs:'WBS-MAP',transformer:'TR-MAP',pole:'เมนA',budgetYear:'2027',pea:'00991',latlong:'12.5,99.8'},'map-main-pole-work-12345');
+const mainJob=c.getMapWorkAnnotations(mapScope).callouts.find(j=>j.id==='map-main-pole-work-12345');assert.equal(mainJob.label,'A');assert.equal(mainJob.pole,'เมนA');assert.ok(c.getMapWorkAnnotations(mapScope).callouts.some(j=>j.pole==='1'&&j.label==='A'));
+assert.equal(c.validatedMapTexts_([textItem])[0].angle,0);assert.equal(c.validatedMapTexts_([{...textItem,angle:-90}])[0].angle,-90);assert.throws(()=>c.validatedMapTexts_([{...textItem,angle:Infinity}]));assert.throws(()=>c.validatedMapTexts_([{...textItem,angle:361}]));
+const rotated={...textItem,angle:45};c.saveMapTextAnnotations(mapScope,[{pageId:overlapPage,items:[rotated],expectedRevision:'map-text-delete-first-12345'}],'map-text-rotate-save-12345');assert.equal(c.getMapTextAnnotations(mapScope).pages.find(p=>p.pageId===overlapPage).items[0].angle,45);
+console.log('PASS main-pole aliases including shared A/เมนA targets, legacy text default rotation, angle validation and persisted rotation');
