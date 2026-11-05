@@ -10,12 +10,14 @@ function googleUser_(){
  return email;
 }
 function user_(token){accountSession_(token);return googleUser_();}
+function appLoadError_(heading,message){const escape=value=>String(value||'ไม่ทราบสาเหตุ').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));return HtmlService.createHtmlOutput('<!doctype html><html lang="th"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><body style="font-family:Tahoma,sans-serif;padding:24px"><h2>'+escape(heading)+'</h2><p>'+escape(message)+'</p></body></html>');}
 function doGet(){
- try{googleUser_();return HtmlService.createHtmlOutput(appHtml_()).setTitle('งานปรับปรุง WBS และ Patrol').addMetaTag('viewport','width=device-width, initial-scale=1');}
- catch(e){return HtmlService.createHtmlOutput('<h1>งานปรับปรุง WBS</h1><p>กรุณาใช้บัญชี Google ที่ผู้ดูแลอนุญาต และตรวจการตั้งค่า deployment</p>');}
+ try{googleUser_();}catch(error){return appLoadError_('ตรวจสิทธิ์บัญชี Google ไม่สำเร็จ',error.message);}
+ try{return HtmlService.createHtmlOutput(appHtml_()).setTitle('งานปรับปรุง WBS และ Patrol').addMetaTag('viewport','width=device-width, initial-scale=1');}
+ catch(error){return appLoadError_('โหลดหน้าเว็บไม่สำเร็จ',error.message);}
 }
-function appHtml_(){const html=HtmlService.createHtmlOutputFromFile('Index').getContent(),marker="<?!= include_('Leaflet'); ?>";if(!html.includes(marker))throw new Error('Index.html ไม่ครบ กรุณาวางไฟล์ทั้งไฟล์');return html.replace(marker,()=>include_('Leaflet'));}
-function include_(name){return HtmlService.createHtmlOutputFromFile(name).getContent();}
+function appHtml_(){const html=HtmlService.createTemplateFromFile('Index').getRawContent(),marker="<?!= include_('Leaflet'); ?>";if(!html.includes(marker))throw new Error('ไม่พบส่วนแทรก Leaflet ใน Index.html กรุณาวางไฟล์ Index.html ทั้งไฟล์');return html.replace(marker,()=>include_('Leaflet'));}
+function include_(name){return HtmlService.createTemplateFromFile(name).getRawContent();}
 function sheet_(){
  const book=SpreadsheetApp.openById(SPREADSHEET_ID_);
  let sheet=book.getSheetByName('DATA');
