@@ -11,9 +11,10 @@ function googleUser_(){
 }
 function user_(token){accountSession_(token);return googleUser_();}
 function doGet(){
- try{googleUser_();return HtmlService.createTemplateFromFile('Index').evaluate().setTitle('งานปรับปรุง WBS และ Patrol').addMetaTag('viewport','width=device-width, initial-scale=1');}
+ try{googleUser_();return HtmlService.createHtmlOutput(appHtml_()).setTitle('งานปรับปรุง WBS และ Patrol').addMetaTag('viewport','width=device-width, initial-scale=1');}
  catch(e){return HtmlService.createHtmlOutput('<h1>งานปรับปรุง WBS</h1><p>กรุณาใช้บัญชี Google ที่ผู้ดูแลอนุญาต และตรวจการตั้งค่า deployment</p>');}
 }
+function appHtml_(){const html=HtmlService.createHtmlOutputFromFile('Index').getContent(),marker="<?!= include_('Leaflet'); ?>";if(!html.includes(marker))throw new Error('Index.html ไม่ครบ กรุณาวางไฟล์ทั้งไฟล์');return html.replace(marker,()=>include_('Leaflet'));}
 function include_(name){return HtmlService.createHtmlOutputFromFile(name).getContent();}
 function sheet_(){
  const book=SpreadsheetApp.openById(SPREADSHEET_ID_);
