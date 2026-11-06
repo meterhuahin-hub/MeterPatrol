@@ -8,11 +8,26 @@ const server=vm.createContext({HtmlService:{createTemplateFromFile:n=>({getRawCo
  const state=()=>page.evaluate(()=>{const d=document.getElementById('surveyEntryDialog'),s=document.getElementById('page-survey');return {open:d.open,inside:d.contains(s),hidden:s.hidden,pole:document.getElementById('pole').value,map:document.getElementById('fieldMapDialog').open,wbsLabelHidden:document.getElementById('wbs').closest('label').hidden,title:document.getElementById('surveyEntryTitle').textContent};});
  const tap=label=>page.locator(`[data-survey-pole][data-label="${label}"] [data-pole-face]`).boundingBox().then(b=>device==='desktop'?page.mouse.click(b.x+b.width/2,b.y+b.height/2):page.touchscreen.tap(b.x+b.width/2,b.y+b.height/2));
  const openMap=async()=>{await page.waitForSelector('#fieldMapImageHost svg [data-survey-pole]',{state:'attached',timeout:6000});};
- await page.evaluate(()=>{navigate('survey');document.getElementById('budgetYear').value='2570';document.getElementById('wbs').value='WBS-X';document.getElementById('transformer').value='TR-X';openFieldSurveyMap();});await openMap();
+ const visible=id=>page.locator('#'+id).isVisible();
+ const compact=async()=>{for(const id of ['budgetYear','wbs','transformer'])assert.equal(await visible(id),true,id+' stays on the page');for(const id of ['pole','pea','surveyDate','electricityOffice','latlong','phase','saveBtn','beforePreview'])assert.equal(await visible(id),false,id+' waits for the popup');};
+ const setField=async(id,value)=>{await page.fill('#'+id,value);await page.locator('#'+id).blur();};
+ const mapOpen=()=>page.evaluate(()=>document.getElementById('fieldMapDialog').open);
+ await page.evaluate(()=>navigate('survey'));await page.waitForTimeout(100);await compact();
+ // Three complete fields open the map by themselves.
+ await setField('budgetYear','2570');await setField('wbs','WBS-X');assert.equal(await mapOpen(),false,'an incomplete scope stays on the page');await setField('transformer','TR-X');await page.waitForFunction(()=>document.getElementById('fieldMapDialog').open,null,{timeout:3000});await openMap();
+ // Closing does not reopen until the scope changes.
+ await page.evaluate(()=>closeFieldSurveyMap());await page.locator('#wbs').focus();await page.locator('#wbs').blur();await page.waitForTimeout(100);assert.equal(await mapOpen(),false,'the same scope does not reopen by itself');await compact();
+ await page.evaluate(()=>chooseSurveyCombo('transformer','TR-Y'));await page.waitForFunction(()=>document.getElementById('fieldMapDialog').open,null,{timeout:3000});await page.evaluate(()=>{closeFieldSurveyMap();document.getElementById('transformer').value='TR-X';});
+ // A job with no map set can still be recorded.
+ await page.click('#fieldMapSkip');let skip=await state();assert.equal(skip.open,true,'recording without a map opens the form');assert.equal(await page.locator('#pole').evaluate(e=>e.readOnly),false,'the pole can be typed');assert.equal(await visible('pea'),true);assert.equal(await visible('saveBtn'),true);assert.equal(await visible('wbs'),false);await page.click('#surveyEntryClose');await compact();
+ // Editing and Patrol keep the whole form.
+ await page.evaluate(()=>editSurveyRecord({id:'old',wbs:'WBS-X',transformer:'TR-X',budgetYear:'2027',pole:'A',pea:'1',surveyDate:'2026-11-01',surveyResult:'สำรวจ',before:'',after:''}));await page.waitForTimeout(100);assert.equal(await visible('pea'),true,'editing shows the whole form');assert.equal(await mapOpen(),false,'editing does not open the map by itself');await page.evaluate(()=>resetForm());await page.waitForTimeout(50);await compact();
+ await page.evaluate(()=>navigate('patrol-survey'));await page.waitForTimeout(100);assert.equal(await visible('pea'),true,'Patrol shows the whole form');await setField('budgetYear','2570').catch(()=>{});assert.equal(await mapOpen(),false);
+ await page.evaluate(()=>navigate('survey'));await page.waitForTimeout(100);await compact();await setField('budgetYear','2570');await setField('wbs','WBS-X');await page.evaluate(()=>{document.getElementById('transformer').value='TR-X';openFieldSurveyMap();});await openMap();
  assert.equal((await page.locator('[data-survey-pole][data-label="A"] text').textContent()),'A','no checkmark on the pole');
  // A pole with no work opens the form over the map.
  await tap('B');await page.waitForFunction(()=>document.getElementById('surveyEntryDialog').open,null,{timeout:3000});let s=await state();
- assert.equal(s.pole,'B');assert.ok(s.inside&&!s.hidden&&s.map,'form sits in the popup above the map');assert.ok(s.title.includes('B'),'popup names the pole');assert.equal(s.wbsLabelHidden,true,'year, WBS and TR are fixed by the map');assert.equal(await page.locator('#pole').evaluate(e=>e.readOnly),true,'pole comes from the map');
+ assert.equal(s.pole,'B');assert.ok(s.inside&&!s.hidden&&s.map,'form sits in the popup above the map');for(const id of ['pea','surveyDate','electricityOffice','latlong','phase','saveBtn'])assert.equal(await visible(id),true,id+' shows in the popup');assert.ok(s.title.includes('B'),'popup names the pole');assert.equal(s.wbsLabelHidden,true,'year, WBS and TR are fixed by the map');assert.equal(await page.locator('#pole').evaluate(e=>e.readOnly),true,'pole comes from the map');
  const box=await page.locator('#saveBtn').boundingBox();assert.ok(box&&box.width>0,'save button is visible');
  // Closing returns to the map and the form goes home.
  await page.click('#surveyEntryClose');s=await state();assert.equal(s.open,false);assert.equal(s.inside,false,'form returns to its page');assert.equal(s.map,true,'map stays open');assert.equal(s.wbsLabelHidden,false);assert.equal(await page.evaluate(()=>document.getElementById('page-survey').closest('#surveyEntryDialog')),null);
