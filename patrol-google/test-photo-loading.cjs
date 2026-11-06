@@ -1,7 +1,7 @@
 const fs=require('fs'),vm=require('vm'),assert=require('assert/strict'),html=fs.readFileSync(__dirname+'/Index.html','utf8');
 const elements={operationOverlay:{hidden:true},appShell:{setAttribute(k,v){this[k]=v;}},operationDetail:{}},calls=[];
 const c=vm.createContext({loginToken:'test-token',document:{getElementById:id=>elements[id]},setTimeout,clearTimeout,showLogin:()=>{}});
-c.google={script:{get run(){let ok;const runner={withSuccessHandler(fn){ok=fn;return this;},withFailureHandler(){return this;},getWorkPhotos(...args){calls.push({method:'getWorkPhotos',args,ok});},listPatrol(...args){calls.push({method:'listPatrol',args,ok});}};return runner;}}};
+c.google={script:{get run(){let ok;const runner={withSuccessHandler(fn){ok=fn;return this;},withFailureHandler(){return this;},getWorkPhotos(...args){calls.push({method:'getWorkPhotos',args,ok});},getWorkPhotoThumbnails(...args){calls.push({method:'getWorkPhotoThumbnails',args,ok});},listPatrol(...args){calls.push({method:'listPatrol',args,ok});}};return runner;}}};
 vm.runInContext(html.slice(html.indexOf('let pendingOperations='),html.indexOf('function syncPatrolJob(')),c);
 (async()=>{
  // Photo requests must leave the screen usable on a slow connection.
@@ -11,10 +11,13 @@ vm.runInContext(html.slice(html.indexOf('let pendingOperations='),html.indexOf('
  calls[0].ok(['photo']);await photos;
  await new Promise(r=>setTimeout(r,160));
  assert.equal(elements.operationOverlay.hidden,true);
+ const thumbnails=c.rpc('getWorkPhotoThumbnails','record-1',['survey']);
+ assert.equal(elements.operationOverlay.hidden,true,'thumbnail loading must not cover the screen');
+ calls[1].ok({});await thumbnails;
  // Other requests keep the blocking overlay and it still closes.
  const list=c.rpc('listPatrol');
  assert.equal(elements.operationOverlay.hidden,false,'data requests keep the overlay');
- calls[1].ok([]);await list;
+ calls[2].ok([]);await list;
  await new Promise(r=>setTimeout(r,160));
  assert.equal(elements.operationOverlay.hidden,true);
  // The longest side is limited on every photo page, so portrait phone photos are not oversized.

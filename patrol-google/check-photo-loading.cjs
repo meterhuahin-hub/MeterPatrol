@@ -5,7 +5,7 @@ const code=html.slice(start,end),IMAGE='data:image/jpeg;base64,/9j/4AAQSkZJRgABA
 const URLS=['https://drive.google.com/file/d/a1/view','https://drive.google.com/file/d/a2/view'];
 const page_=(di,extra='')=>`<!doctype html><body style="margin:0"><div id="spacer" style="height:5000px"></div><div id="far"></div><script>
 const IMAGE=${JSON.stringify(IMAGE)};window.calls=[];window.reply=[IMAGE,IMAGE];let signedAccount={di:${JSON.stringify(di)}};
-function rpc(method,...args){calls.push([method,...args]);return Promise.resolve(reply);}
+function rpc(method,...args){calls.push([method,...args]);if(method==='getWorkPhotoThumbnails')return Promise.resolve(Object.fromEntries(args[1].map(kind=>[kind,window.thumbReply||reply])));return Promise.resolve(window.fullReply||reply);}
 ${extra}
 ${code}
 </script></body>`;
@@ -27,6 +27,21 @@ ${code}
 
   await open();await add('far','eager',{eager:true});await shown();
   assert.equal(await count(),1,'eager photos load without scrolling');
+  assert.equal(await page.evaluate(()=>calls[0][0]),'getWorkPhotos','reports keep full photos for printing');
+
+  const PNG='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==';
+  await open('T','window.thumbReply=['+JSON.stringify(PNG)+','+JSON.stringify(PNG)+'];');await page.evaluate(()=>document.getElementById('spacer').remove());
+  await page.evaluate(([urls])=>{appendSavedPhotos(document.getElementById('far'),'job','survey',urls,'รูป');appendSavedPhotos(document.getElementById('far'),'job','delivery',urls,'รูป');},[URLS]);await shown();
+  assert.equal(await page.evaluate(()=>calls.filter(c=>c[0]==='getWorkPhotoThumbnails').length),1,'all photos of a job share one request');
+  assert.deepEqual(await page.evaluate(()=>[...calls[0][2]].sort()),['delivery','survey']);
+  assert.equal(await page.evaluate(()=>document.querySelector('.savedPhotos img').src),PNG,'the thumbnail is shown first');
+  assert.equal(await count(),1,'full photos are not fetched until asked');
+  await page.click('.savedPhotos figure button');await page.waitForFunction(i=>document.querySelector('.savedPhotos img').src===i,IMAGE,{timeout:5000});
+  assert.equal(await page.evaluate(()=>calls[1][0]),'getWorkPhotos','the button loads the full photo');
+  await page.waitForFunction(()=>!document.querySelector('.savedPhotos figure').querySelector('button'),null,{timeout:5000});
+  await open('T','window.thumbReply=['+JSON.stringify(PNG)+','+JSON.stringify(PNG)+'];');await page.evaluate(()=>document.getElementById('spacer').remove());
+  await page.evaluate(([urls])=>appendSavedPhotos(document.getElementById('far'),'job','survey',urls,'รูป'),[URLS]);await shown();
+  assert.equal(await count(),0,'stored thumbnails reopen without the network');
 
   await open();await page.evaluate(()=>document.getElementById('spacer').remove());await add('far','lazy');await shown();await settle();
   assert.equal(await count(),0,'a reopened job is served from the device');
@@ -62,7 +77,7 @@ ${code}
   const vm=require('vm'),root=__dirname+'/',server=vm.createContext({HtmlService:{createTemplateFromFile:name=>({getRawContent:()=>fs.readFileSync(root+name+'.html','utf8')})}});vm.runInContext(fs.readFileSync(root+'Code.gs','utf8'),server);const appHtml=server.appHtml_();
   const phone=await browser.newContext({viewport:{width:390,height:844}}),app=await phone.newPage(),errors=[];app.on('pageerror',e=>errors.push(e.message));
   await phone.route(/tile\.openstreetmap\.org/,r=>r.abort());await phone.route('https://app.test/',r=>r.fulfill({contentType:'text/html',body:appHtml}));
-  await app.addInitScript(({IMAGE,URLS})=>{const user={di:'contractor1',name:'Test',position:'ผู้รับจ้าง',role:'contractor',workTypes:['wbs','patrol']},record={id:'r1',date:'2026-11-01T00:00:00.000Z',surveyDate:'2026-11-01',wbs:'W-1',transformer:'T1',pole:'A',pea:'00001',phase:'',machine:'',poleSize:'',jobType:'',latitude:'12.5',longitude:'99.9',latlong:'12.5,99.9',surveyResult:'สำรวจ',note:'',before:URLS[0],after:URLS[1],budgetYear:'2026',patrolJob:'',electricityOffice:'',address:'',customerName:'',customerCa:'',delivery:null,inspection:null,transfer:null};window.photoCalls=0;sessionStorage.setItem('patrol-di-session','token');window.google={script:{run:new Proxy({},{get:(target,key)=>{if(key==='withSuccessHandler')return fn=>{target.ok=fn;return google.script.run;};if(key==='withFailureHandler')return fn=>{target.fail=fn;return google.script.run;};return ()=>{const ok=target.ok;if(key==='getWorkPhotos'){photoCalls++;setTimeout(()=>ok([IMAGE,IMAGE]),2000);return;}queueMicrotask(()=>ok(key==='getLoginInfo'?{email:'c@example.com',canBootstrap:false}:key==='getAccountSession'?user:key==='listPatrol'?[record]:[]));};}})}};},{IMAGE,URLS});
+  await app.addInitScript(({IMAGE,URLS})=>{const user={di:'contractor1',name:'Test',position:'ผู้รับจ้าง',role:'contractor',workTypes:['wbs','patrol']},record={id:'r1',date:'2026-11-01T00:00:00.000Z',surveyDate:'2026-11-01',wbs:'W-1',transformer:'T1',pole:'A',pea:'00001',phase:'',machine:'',poleSize:'',jobType:'',latitude:'12.5',longitude:'99.9',latlong:'12.5,99.9',surveyResult:'สำรวจ',note:'',before:URLS[0],after:URLS[1],budgetYear:'2026',patrolJob:'',electricityOffice:'',address:'',customerName:'',customerCa:'',delivery:null,inspection:null,transfer:null};window.photoCalls=0;sessionStorage.setItem('patrol-di-session','token');window.google={script:{run:new Proxy({},{get:(target,key)=>{if(key==='withSuccessHandler')return fn=>{target.ok=fn;return google.script.run;};if(key==='withFailureHandler')return fn=>{target.fail=fn;return google.script.run;};return (...args)=>{const ok=target.ok;if(key==='getWorkPhotoThumbnails'){photoCalls++;setTimeout(()=>ok(Object.fromEntries(args[1].map(kind=>[kind,[IMAGE,IMAGE]]))),2000);return;}queueMicrotask(()=>ok(key==='getLoginInfo'?{email:'c@example.com',canBootstrap:false}:key==='getAccountSession'?user:key==='listPatrol'?[record]:[]));};}})}};},{IMAGE,URLS});
   const openJob=async()=>{await app.goto('https://app.test/');await app.waitForFunction(()=>!document.getElementById('appShell').hidden&&typeof records!=='undefined'&&records.length===1,null,{timeout:15000});await app.evaluate(()=>{navigate('contractor');openContractJob('r1');});};
   const overlayHidden=()=>app.evaluate(()=>document.getElementById('operationOverlay').hidden);
   const photosShown=()=>app.waitForFunction(()=>{const images=[...document.querySelectorAll('#contractSurvey .savedPhotos img')];return images.length===2&&images.every(i=>!i.hidden&&i.naturalWidth>0);},null,{timeout:10000});

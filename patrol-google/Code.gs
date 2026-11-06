@@ -24,10 +24,13 @@ bootOpenApp();
 </script></body></html>`;}
 function appHtml_(){const html=HtmlService.createTemplateFromFile('Index').getRawContent(),marker="<?!= include_('Leaflet'); ?>";if(!html.includes(marker))throw new Error('ไม่พบส่วนแทรก Leaflet ใน Index.html กรุณาวางไฟล์ Index.html ทั้งไฟล์');return html.replace(marker,()=>include_('Leaflet'));}
 function include_(name){return HtmlService.createTemplateFromFile(name).getRawContent();}
+const DATA_SHEET_HEADERS_=[...HEADERS_,'รูปปฏิบัติงาน 1','รูปปฏิบัติงาน 2','ดูรูปตรวจรับ 1','ดูรูปตรวจรับ 2','งาน Patrol','กฟฟ.','ข้อมูลการลบ','ที่อยู่','ชื่อผู้ใช้ไฟ','หมายเลขผู้ใช้ไฟ CA','ปีงบประมาณของงาน (พ.ศ.)'];
+function dataSheetComplete_(sheet){if(sheet.getMaxColumns()<DATA_SHEET_HEADERS_.length)return false;const headers=sheet.getRange(1,1,1,DATA_SHEET_HEADERS_.length).getValues()[0].map(v=>String(v).replace(/\s+/g,' ').trim());return DATA_SHEET_HEADERS_.every((v,i)=>headers[i]===v);}
 function sheet_(){
  const book=SpreadsheetApp.openById(SPREADSHEET_ID_);
  let sheet=book.getSheetByName('DATA');
  if(!sheet){sheet=book.insertSheet('DATA');sheet.getRange(1,1,1,HEADERS_.length).setValues([HEADERS_]);sheet.setFrozenRows(1);}
+ if(dataSheetComplete_(sheet))return sheet;
  migrateOldWoodColumns_(sheet);
  const headers=sheet.getRange(1,1,1,HEADERS_.length).getValues()[0].map(v=>String(v).replace(/\s+/g,' ').trim());
  if(!HEADERS_.every((v,i)=>headers[i]===v))throw new Error('หัวตาราง DATA ไม่ตรงกับระบบ ห้ามเขียนทับข้อมูล กรุณาติดต่อผู้ดูแล');
@@ -297,8 +300,16 @@ function syncInspectionPhotos(token){
 
 
 // Resolve only photo links recorded for this work; never accept arbitrary Drive IDs.
-function authorizedPhotoUrls_(recordId,kind,token){const account=accountSession_(token);googleUser_();if(typeof recordId!=='string'||!['delivery','inspection','survey','transfer'].includes(kind))throw new Error('คำขอรูปไม่ถูกต้อง');const sheet=sheet_(),ids=sheet.getLastRow()>1?sheet.getRange(2,1,sheet.getLastRow()-1,1).getValues():[],matches=ids.map((row,i)=>({id:String(row[0]),index:i})).filter(r=>r.id===recordId);if(matches.length!==1)throw new Error('ไม่พบงานหรือไม่มีสิทธิ์ดูรูป');const row=sheet.getRange(matches[0].index+2,1,1,58).getValues()[0],record=readRow_(row);if(row[53]||!canAccessWork_(account,record))throw new Error('ไม่พบงานหรือไม่มีสิทธิ์ดูรูป');if(kind==='survey')return [record.before,record.after];const item=(kind==='transfer'?transferMap_():kind==='delivery'?deliveryMap_():inspectionMap_()).get(recordId);if(!item)throw new Error('ไม่พบรูปของงานนี้');return [item.photo1,item.photo2];}
-function photoDataFromUrl_(url){const match=/^https:\/\/drive\.google\.com\/file\/d\/([A-Za-z0-9_-]+)(?:\/|$)/.exec(url||'');if(!match)throw new Error('ไม่มีรูปหรือลิงก์รูปไม่ถูกต้อง');const blob=DriveApp.getFileById(match[1]).getBlob(),bytes=blob.getBytes();if(blob.getContentType()!=='image/jpeg'||bytes.length>2100000)throw new Error('ไม่สามารถแสดงรูปนี้ในเว็บ กรุณาเปิดลิงก์ Drive');return 'data:image/jpeg;base64,'+Utilities.base64Encode(bytes);}
+const PHOTO_KINDS_=['delivery','inspection','survey','transfer'],PHOTO_THUMBNAIL_MAX_BYTES_=500000;
+function authorizedPhotoRecord_(recordId,token){const account=accountSession_(token);googleUser_();if(typeof recordId!=='string')throw new Error('คำขอรูปไม่ถูกต้อง');const sheet=sheet_(),ids=sheet.getLastRow()>1?sheet.getRange(2,1,sheet.getLastRow()-1,1).getValues():[],matches=ids.map((row,i)=>({id:String(row[0]),index:i})).filter(r=>r.id===recordId);if(matches.length!==1)throw new Error('ไม่พบงานหรือไม่มีสิทธิ์ดูรูป');const row=sheet.getRange(matches[0].index+2,1,1,58).getValues()[0],record=readRow_(row);if(row[53]||!canAccessWork_(account,record))throw new Error('ไม่พบงานหรือไม่มีสิทธิ์ดูรูป');return record;}
+function photoSources_(){let deliveries,transfers;const delivery=()=>deliveries||(deliveries=deliveryMap_()),transfer=()=>transfers||(transfers=transferMap_());return {delivery,transfer,inspection:()=>inspectionMap_(delivery(),transfer())};}
+function photoUrlsOf_(record,kind,sources){if(kind==='survey')return [record.before,record.after];const item=sources[kind]().get(record.id);if(!item)throw new Error('ไม่พบรูปของงานนี้');return [item.photo1,item.photo2];}
+function authorizedPhotoUrls_(recordId,kind,token){if(!PHOTO_KINDS_.includes(kind))throw new Error('คำขอรูปไม่ถูกต้อง');return photoUrlsOf_(authorizedPhotoRecord_(recordId,token),kind,photoSources_());}
+function photoFileFromUrl_(url){const match=/^https:\/\/drive\.google\.com\/file\/d\/([A-Za-z0-9_-]+)(?:\/|$)/.exec(url||'');if(!match)throw new Error('ไม่มีรูปหรือลิงก์รูปไม่ถูกต้อง');return DriveApp.getFileById(match[1]);}
+function photoDataFromUrl_(url){const blob=photoFileFromUrl_(url).getBlob(),bytes=blob.getBytes();if(blob.getContentType()!=='image/jpeg'||bytes.length>2100000)throw new Error('ไม่สามารถแสดงรูปนี้ในเว็บ กรุณาเปิดลิงก์ Drive');return 'data:image/jpeg;base64,'+Utilities.base64Encode(bytes);}
+// Drive may have no thumbnail for a new file, so the full photo is the fallback.
+function photoThumbnailFromUrl_(url){let thumbnail=null;try{thumbnail=photoFileFromUrl_(url).getThumbnail();}catch(ignore){}if(thumbnail){const type=thumbnail.getContentType(),bytes=thumbnail.getBytes();if(['image/jpeg','image/png'].includes(type)&&bytes.length>0&&bytes.length<=PHOTO_THUMBNAIL_MAX_BYTES_)return 'data:'+type+';base64,'+Utilities.base64Encode(bytes);}return photoDataFromUrl_(url);}
+function getWorkPhotoThumbnails(recordId,kinds,token){if(!Array.isArray(kinds)||!kinds.length||new Set(kinds).size!==kinds.length||kinds.some(kind=>!PHOTO_KINDS_.includes(kind)))throw new Error('คำขอรูปไม่ถูกต้อง');const record=authorizedPhotoRecord_(recordId,token),sources=photoSources_(),result={};for(const kind of kinds){try{result[kind]=photoUrlsOf_(record,kind,sources).map(url=>{try{return url?photoThumbnailFromUrl_(url):null;}catch(error){return {error:error.message};}});}catch(error){result[kind]={error:error.message};}}return result;}
 function getWorkPhoto(recordId,kind,index,token){if(![1,2].includes(index))throw new Error('คำขอรูปไม่ถูกต้อง');return photoDataFromUrl_(authorizedPhotoUrls_(recordId,kind,token)[index-1]);}
 function getWorkPhotos(recordId,kind,token){const urls=authorizedPhotoUrls_(recordId,kind,token);return urls.map(url=>{try{return url?photoDataFromUrl_(url):null;}catch(error){return {error:error.message};}});}
 
