@@ -64,6 +64,11 @@ ${code}
   assert.equal(await page.evaluate(()=>oldest),1,'the oldest set is evicted past the limit');
   await page.evaluate(()=>clearPersistentPhotos());
 
+  await open('M');await page.evaluate(async()=>{for(let i=0;i<=PHOTO_STORE_MAP_LIMIT;i++){await writeStoredPhotos(photoStoreKey('map','p'+i,'page',['u']),['data:image/jpeg;base64,AA==']);await new Promise(r=>setTimeout(r,2));}await new Promise(r=>setTimeout(r,200));});
+  assert.equal(await page.evaluate(async()=>(await readStoredPhotos(photoStoreKey('map','p0','page',['u'])))===null),true,'the oldest map image is evicted past its own limit');
+  assert.equal(await page.evaluate(async()=>(await readStoredPhotos(photoStoreKey('map','p'+PHOTO_STORE_MAP_LIMIT,'page',['u'])))!==null),true,'the newest map image stays');
+  await page.evaluate(()=>clearPersistentPhotos());
+
   await open('A','Object.defineProperty(window,"indexedDB",{get(){throw new Error("blocked");}});');await page.evaluate(()=>document.getElementById('spacer').remove());await add('far','blocked');await shown();
   assert.equal(await count(),1,'blocked storage falls back to the network');
   await page.evaluate(()=>clearPersistentPhotos());
