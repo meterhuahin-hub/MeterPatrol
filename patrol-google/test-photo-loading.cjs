@@ -16,7 +16,7 @@ vm.runInContext(html.slice(html.indexOf('let pendingOperations='),html.indexOf('
  calls[1].ok({});await thumbnails;
  assert.ok(html.includes("!['getWorkPhotos','getWorkPhotoThumbnails','getReportMapPageImage','listElectricityOffices'].includes(method)"),'map images and offices do not cover the screen');
  assert.equal((html.match(/rpc\('getReportMapPageImage'/g)||[]).length,1,'both map views share one image loader');
- assert.equal((html.match(/cachedReportMapImage\(/g)||[]).length,3,'report and field maps both use the stored image loader');
+ assert.equal((html.match(/cachedReportMapImage\(/g)||[]).length,4,'report, field and pole editor maps use the stored image loader');
  assert.ok(!html.includes("text.textContent=point.label+(jobs.length?' ✓':'')"),'surveyed poles show green without a checkmark');
  assert.ok(html.includes('text.textContent=point.label;'),'pole labels show only the label');
  assert.ok(!html.includes('สีเขียว ✓'),'help text no longer mentions a checkmark');
