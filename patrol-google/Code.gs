@@ -85,6 +85,7 @@ function validate_(input){
  if(r.jobType!=='รื้อถอน'&&!r.pea)throw new Error('กรุณาระบุ PEA. ยกเว้นงานประเภท รื้อถอน');
  if(!r.latlong)throw new Error('กรุณาระบุ LatLong ก่อนบันทึกงาน');
  if(r.latlong){const parts=r.latlong.split(',').map(s=>s.trim());const lat=Number(parts[0]),lng=Number(parts[1]);if(parts.length!==2||parts.some(s=>!s)||!Number.isFinite(lat)||!Number.isFinite(lng)||Math.abs(lat)>90||Math.abs(lng)>180)throw new Error('พิกัด Latitude/Longitude ไม่ถูกต้อง');}
+ if(input.patrolPoleGroup!==undefined){if(typeof input.patrolPoleGroup!=='string'||(input.patrolPoleGroup&&!/^[A-Za-z0-9-]{16,80}$/.test(input.patrolPoleGroup)))throw new Error('รหัสกลุ่มเสาไม่ถูกต้อง');if(input.patrolPoleGroup)r.patrolPoleGroup=input.patrolPoleGroup;}
  return r;
 }
 function photos_(input){
@@ -107,9 +108,15 @@ function readRow_(row){
  r.latlong=r.latitude!==''&&r.longitude!==''?r.latitude+','+r.longitude:'';
  return r;
 }
+const PATROL_POLE_HEADERS_=['Record ID','กลุ่มเสา Patrol','ผู้บันทึก','บันทึกเมื่อ'];
+function patrolPoleGroups_(){return new Map(mapWorkRows_('PatrolPoleGroups',PATROL_POLE_HEADERS_).map(row=>[String(row[0]),String(row[1])]));}
+function patrolMachineNumber_(value){const match=/^เครื่องที่ ([1-8])$/.exec(String(value||''));return match?Number(match[1]):0;}
+function checkPatrolPoleGroup_(clean,recordId,rows){if(!clean.patrolPoleGroup)return;if(!clean.patrolJob||!patrolMachineNumber_(clean.machine))throw new Error('กรุณาเลือกงาน Patrol และเครื่องที่ 1–8');const groups=patrolPoleGroups_(),old=groups.get(recordId);if(old&&old!==clean.patrolPoleGroup)throw new Error('ไม่สามารถเปลี่ยนกลุ่มเสาของงานเดิม');for(const row of rows){if(row[53]||String(row[0])===recordId||groups.get(String(row[0]))!==clean.patrolPoleGroup)continue;if(patrolMachineNumber_(row[8])===patrolMachineNumber_(clean.machine))throw new Error('เครื่องนี้บันทึกแล้วในเสาเดียวกัน กรุณาเปิดรายการเดิมหรือเลือกเครื่องอื่น');}}
+function savePatrolPoleGroup_(clean,recordId,email){if(!clean.patrolPoleGroup)return;const groups=patrolPoleGroups_();if(groups.has(recordId)){if(groups.get(recordId)!==clean.patrolPoleGroup)throw new Error('กลุ่มเสาไม่ตรงกับงานเดิม');return;}const sheet=mapWorkSheet_('PatrolPoleGroups',PATROL_POLE_HEADERS_,true);sheet.getRange(sheet.getLastRow()+1,1,1,PATROL_POLE_HEADERS_.length).setValues([[recordId,clean.patrolPoleGroup,email,storedDateToBE_(new Date().toISOString())].map(mapWorkSafe_)]);}
+function assignPatrolPoleGroup(recordId,token){denyContractor_(token);const email=user_(token),lock=LockService.getScriptLock();lock.waitLock(30000);try{const sheet=sheet_(),rows=sheet.getLastRow()>1?sheet.getRange(2,1,sheet.getLastRow()-1,58).getValues():[],matches=rows.filter(row=>String(row[0])===recordId&&!row[53]);if(matches.length!==1)throw new Error('ไม่พบงาน Patrol');const record=readRow_(matches[0]);if(!record.patrolJob||!patrolMachineNumber_(record.machine))throw new Error('กรุณาแก้ไขงานเดิมให้เลือกเครื่องที่ 1–8 ก่อนเพิ่มมิเตอร์');const group=patrolPoleGroups_().get(recordId)||Utilities.getUuid();record.patrolPoleGroup=group;checkPatrolPoleGroup_(record,recordId,rows);savePatrolPoleGroup_(record,recordId,email);SpreadsheetApp.flush();return {id:recordId,patrolPoleGroup:group};}finally{lock.releaseLock();}}
 function listPatrol(token){
  const account=accountSession_(token);googleUser_();const lock=LockService.getScriptLock();lock.waitLock(30000);
- try{const sheet=sheet_();if(sheet.getLastRow()<2)return [];const deliveries=deliveryMap_(),transfers=transferMap_(),inspections=inspectionMap_(deliveries,transfers);return sheet.getRange(2,1,sheet.getLastRow()-1,58).getValues().filter(row=>!row[53]).filter(row=>row.some(v=>v!==''&&v!==null)).map(readRow_).map(r=>{const delivery=deliveries.get(r.id);return Object.assign(r,{delivery:delivery||null,inspection:inspections.get(r.id)||null,transfer:transfers.get(r.id)||null});}).filter(r=>canAccessWork_(account,r)).reverse();}
+ try{const sheet=sheet_();if(sheet.getLastRow()<2)return [];const deliveries=deliveryMap_(),transfers=transferMap_(),inspections=inspectionMap_(deliveries,transfers),poleGroups=patrolPoleGroups_();return sheet.getRange(2,1,sheet.getLastRow()-1,58).getValues().filter(row=>!row[53]).filter(row=>row.some(v=>v!==''&&v!==null)).map(readRow_).map(r=>{const delivery=deliveries.get(r.id);return Object.assign(r,{patrolPoleGroup:poleGroups.get(r.id)||'',delivery:delivery||null,inspection:inspections.get(r.id)||null,transfer:transfers.get(r.id)||null});}).filter(r=>canAccessWork_(account,r)).reverse();}
  finally{lock.releaseLock();}
 }
 function photoName_(pea,key,requestId){
@@ -123,15 +130,16 @@ function savePatrol(input,requestId,token){
  const fingerprint=Utilities.base64Encode(Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256,JSON.stringify([clean,photos])));
  const lock=LockService.getScriptLock();lock.waitLock(30000);const created=[];
  try{
-  const sheet=sheet_();
-  if(sheet.getLastRow()>1){
-   const rows=sheet.getRange(2,1,sheet.getLastRow()-1,HEADERS_.length).getValues();const index=rows.findIndex(row=>String(row[0])===requestId);
+  const sheet=sheet_(),existingRows=sheet.getLastRow()>1?sheet.getRange(2,1,sheet.getLastRow()-1,58).getValues():[];
+  if(existingRows.length){
+   const rows=existingRows;const index=rows.findIndex(row=>String(row[0])===requestId);
    if(index>=0){
     const note=sheet.getRange(index+2,1).getNote();
     let previous;try{previous=JSON.parse(note)}catch(e){throw new Error('พบรหัสบันทึกนี้ใน DATA แล้ว แต่ไม่มีข้อมูลยืนยัน กรุณาตรวจแถวเดิมก่อนส่งซ้ำ');}
     if(previous.recordedBy!==email||previous.fingerprint!==fingerprint)throw new Error('คำขอเดิมมีข้อมูลเปลี่ยน กรุณาโหลดหน้าใหม่ก่อนบันทึก');return {id:requestId};
    }
   }
+  checkPatrolPoleGroup_(clean,requestId,existingRows);
   let folder=null;
   if(photos.before||photos.after){const folderId=PropertiesService.getScriptProperties().getProperty('PHOTO_FOLDER_ID');if(!folderId)throw new Error('แนบรูปต้องตั้ง PHOTO_FOLDER_ID และแชร์โฟลเดอร์ Drive ให้เจ้าหน้าที่ก่อน หรือบันทึกโดยไม่แนบรูป');folder=DriveApp.getFolderById(folderId);}
   const r=Object.assign(clean,{id:requestId,date:new Date().toISOString(),recordedBy:email,fingerprint,before:'',after:''});
@@ -139,7 +147,7 @@ function savePatrol(input,requestId,token){
   const safe=v=>typeof v==='number'?v:(/^[=+\-@]/.test(String(v))?"'"+v:String(v));
   const coords=clean.latlong?clean.latlong.split(',').map(v=>Number(v.trim())):['',''];r.latitude=coords[0];r.longitude=coords[1];
   const values=DATA_KEYS_.map(key=>key==='date'||key==='surveyDate'?storedDateToBE_(r[key]):r[key]);
-  const rowIndex=sheet.getLastRow()+1;
+  const rowIndex=sheet.getLastRow()+1;savePatrolPoleGroup_(clean,requestId,email);
   const range=sheet.getRange(rowIndex,1,1,58);range.setNumberFormat('@');range.setValues([[...values.map(safe),'','','','',safe(clean.patrolJob),safe(clean.electricityOffice),'',safe(clean.address),safe(clean.customerName),safe(clean.customerCa),safe(storedYearToBE_(clean.budgetYear))]]);
   // Keep photos once a row has been written, even if adding its audit note fails.
   created.length=0;
@@ -320,10 +328,11 @@ function getWorkPhotos(recordId,kind,token){const urls=authorizedPhotoUrls_(reco
 function denyContractor_(token){if(accountSession_(token).role==='contractor')throw new Error('สิทธิ์ผู้รับจ้างใช้งานได้เฉพาะส่งมอบงาน');}
 
 function ensureDeletedColumn_(sheet){const max=sheet.getMaxColumns();if(max<54)sheet.insertColumnsAfter(max,54-max);const cell=sheet.getRange(1,54),header=String(cell.getValues()[0][0]||'').trim();if(header&&header!=='ข้อมูลการลบ')throw new Error('คอลัมน์ BB มีหัวตารางอื่น ระบบจะไม่เขียนทับ');if(!header){if(sheet.getLastRow()>1&&sheet.getRange(2,54,sheet.getLastRow()-1,1).getValues().some(row=>row[0]!==''&&row[0]!==null&&row[0]!==undefined))throw new Error('BB มีข้อมูลแต่ไม่มีหัวตาราง กรุณาตรวจสอบ');cell.setValues([['ข้อมูลการลบ']]);}}
-function deletePatrol(recordId,token){admin_(token);googleUser_();if(typeof recordId!=='string'||!recordId||recordId.length>100)throw new Error('รหัสงานไม่ถูกต้อง');const lock=LockService.getScriptLock();lock.waitLock(30000);try{admin_(token);const sheet=sheet_(),rows=sheet.getLastRow()>1?sheet.getRange(2,1,sheet.getLastRow()-1,58).getValues():[],matches=rows.map((row,i)=>({row,index:i})).filter(item=>String(item.row[0])===recordId);if(matches.length>1)throw new Error('Record ID ซ้ำ กรุณาตรวจสอบ');for(const [ledger,idColumn] of [[workSheet_(false),1],[inspectionSheet_(false),1],[transferSheet_(false),1],[mapWorkSheet_('MapArrowPositions',MAP_POSITION_HEADERS_,false),3]]){if(!ledger||ledger.getLastRow()<2)continue;const ids=ledger.getRange(2,idColumn,ledger.getLastRow()-1,1).getValues();for(let i=ids.length-1;i>=0;i--)if(String(ids[i][0])===recordId)ledger.deleteRow(i+2);}if(matches.length)sheet.deleteRow(matches[0].index+2);compactMapWorkNumbers_();SpreadsheetApp.flush();return {id:recordId};}finally{lock.releaseLock();}}
+function deletePatrol(recordId,token){admin_(token);googleUser_();if(typeof recordId!=='string'||!recordId||recordId.length>100)throw new Error('รหัสงานไม่ถูกต้อง');const lock=LockService.getScriptLock();lock.waitLock(30000);try{admin_(token);const sheet=sheet_(),rows=sheet.getLastRow()>1?sheet.getRange(2,1,sheet.getLastRow()-1,58).getValues():[],matches=rows.map((row,i)=>({row,index:i})).filter(item=>String(item.row[0])===recordId);if(matches.length>1)throw new Error('Record ID ซ้ำ กรุณาตรวจสอบ');for(const [ledger,idColumn] of [[workSheet_(false),1],[inspectionSheet_(false),1],[transferSheet_(false),1],[mapWorkSheet_('MapArrowPositions',MAP_POSITION_HEADERS_,false),3],[mapWorkSheet_('PatrolPoleGroups',PATROL_POLE_HEADERS_,false),1]]){if(!ledger||ledger.getLastRow()<2)continue;const ids=ledger.getRange(2,idColumn,ledger.getLastRow()-1,1).getValues();for(let i=ids.length-1;i>=0;i--)if(String(ids[i][0])===recordId)ledger.deleteRow(i+2);}if(matches.length)sheet.deleteRow(matches[0].index+2);compactMapWorkNumbers_();SpreadsheetApp.flush();return {id:recordId};}finally{lock.releaseLock();}}
 function updatePatrol(recordId,input,expected,token){
  denyContractor_(token);const email=user_(token),clean=validate_(input),photos=photos_(input);if(typeof recordId!=='string'||!recordId||!expected)throw new Error('คำขอแก้ไขไม่ถูกต้อง');const lock=LockService.getScriptLock();lock.waitLock(30000);const created=[];
  try{const sheet=sheet_(),rows=sheet.getLastRow()>1?sheet.getRange(2,1,sheet.getLastRow()-1,58).getValues():[],matches=rows.map((row,i)=>({row,index:i})).filter(item=>String(item.row[0])===recordId);if(matches.length!==1||matches[0].row[53])throw new Error('ไม่พบงานหรือรายการถูกลบ');const item=matches[0],old=readRow_(item.row),keys=[...DATA_KEYS_,'patrolJob','electricityOffice','address','customerName','customerCa','budgetYear'];if(keys.some(k=>String(old[k])!==String(expected[k])))throw new Error('งานมีการเปลี่ยนแปลง กรุณาโหลดข้อมูลใหม่ก่อนแก้ไข');
+ const oldGroup=patrolPoleGroups_().get(recordId)||'';if(input.patrolPoleGroup!==undefined&&input.patrolPoleGroup!==oldGroup)throw new Error('ไม่สามารถเปลี่ยนกลุ่มเสาของงานเดิม');if(oldGroup)clean.patrolPoleGroup=oldGroup;checkPatrolPoleGroup_(clean,recordId,rows);
  const r=Object.assign({},old,clean,{id:old.id,date:old.date,surveyResult:old.surveyResult,before:old.before,after:old.after});const coords=clean.latlong?clean.latlong.split(',').map(v=>Number(v.trim())):['',''];r.latitude=coords[0];r.longitude=coords[1];if(photos.before||photos.after){const folderId=PropertiesService.getScriptProperties().getProperty('PHOTO_FOLDER_ID');if(!folderId)throw new Error('ต้องตั้ง PHOTO_FOLDER_ID ก่อนแนบรูป');const folder=DriveApp.getFolderById(folderId);for(const key of ['before','after'])if(photos[key]){const file=folder.createFile(Utilities.newBlob(Utilities.base64Decode(photos[key].split(',')[1]),'image/jpeg',photoName_(clean.pea,key,Utilities.getUuid())));created.push(file);r[key]=file.getUrl();}}
  const safe=v=>typeof v==='number'?v:(/^[=+\-@]/.test(String(v))?"'"+v:String(v));const values=[...DATA_KEYS_.map(k=>safe(k==='date'||k==='surveyDate'?storedDateToBE_(r[k]):r[k])),...item.row.slice(47,51),safe(r.patrolJob),safe(r.electricityOffice),item.row[53]||'',safe(r.address),safe(r.customerName),safe(r.customerCa),safe(storedYearToBE_(r.budgetYear))];sheet.getRange(item.index+2,1,1,58).setValues([values]);created.length=0;sheet.getRange(item.index+2,1).setNote(JSON.stringify({recordedBy:email,editedAt:new Date().toISOString()}));SpreadsheetApp.flush();return {id:recordId};
  }catch(e){created.forEach(file=>{try{file.setTrashed(true)}catch(ignore){}});throw e;}finally{lock.releaseLock();}
