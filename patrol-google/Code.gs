@@ -142,6 +142,27 @@ function linkPatrolPoleMembers(input,token){
   return patrolPoleLinkReceipt_(clean,group);
  }finally{lock.releaseLock();}
 }
+const PATROL_POLE_UNLINK_HEADERS_=['Request ID','Record ID','กลุ่มเสาเดิม','กลุ่มเสาแยก','ผู้บันทึก','บันทึกเมื่อ','สถานะ'];
+function unlinkPatrolPoleMember(input,token){
+ const account=accountSession_(token);if(!['admin','inspector'].includes(account.role))throw new Error('เฉพาะ Admin และช่างผู้ควบคุมงานแยกมิเตอร์ออกจากเสาได้');
+ const email=googleUser_(),actor=String(account.di||'')+' • '+email;if(!input||typeof input.recordId!=='string'||!input.recordId||input.recordId.length>100||typeof input.expectedGroup!=='string'||!input.expectedGroup||input.expectedGroup.length>80||typeof input.requestId!=='string'||!/^[A-Za-z0-9-]{16,80}$/.test(input.requestId))throw new Error('ข้อมูลมิเตอร์หรือกลุ่มเสาไม่ถูกต้อง');
+ const lock=LockService.getScriptLock();lock.waitLock(30000);
+ try{
+  const data=sheet_(),rows=data.getLastRow()>1?data.getRange(2,1,data.getLastRow()-1,58).getValues():[],matches=rows.filter(row=>String(row[0])===input.recordId&&!row[53]);if(matches.length!==1)throw new Error('ไม่พบงาน หรือรหัสงานซ้ำ กรุณาโหลดรายการล่าสุด');const record=readRow_(matches[0]);if(!record.patrolJob||!canAccessWork_(account,record))throw new Error('ไม่มีสิทธิ์แยกมิเตอร์ของงานนี้');
+  const groupRows=mapWorkRows_('PatrolPoleGroups',PATROL_POLE_HEADERS_),matched=groupRows.map((row,index)=>({row,index})).filter(item=>String(item.row[0])===input.recordId);if(matched.length!==1)throw new Error('ไม่พบกลุ่มเสา หรือมีรายการซ้ำ กรุณาโหลดรายการล่าสุด');const current=matched[0],auditRows=mapWorkRows_('PatrolPoleUnlinks',PATROL_POLE_UNLINK_HEADERS_),auditIndex=auditRows.findIndex(row=>String(row[0])===input.requestId),previous=auditIndex<0?null:auditRows[auditIndex],receipt=()=>({id:input.recordId,patrolPoleGroup:String(current.row[1])});
+  if(previous&&(String(previous[1])!==input.recordId||String(previous[2])!==input.expectedGroup||String(previous[4])!==actor))throw new Error('คำขอเดิมมีข้อมูลเปลี่ยน กรุณาเปิดหน้าจัดกลุ่มใหม่');
+  if(previous&&String(previous[6])==='สำเร็จ')return receipt();
+  const ledger=mapWorkSheet_('PatrolPoleGroups',PATROL_POLE_HEADERS_,false);
+  if(previous&&String(current.row[1])===String(previous[3])){const audit=mapWorkSheet_('PatrolPoleUnlinks',PATROL_POLE_UNLINK_HEADERS_,false);audit.getRange(auditIndex+2,7).setValue('สำเร็จ');SpreadsheetApp.flush();return receipt();}
+  if(String(current.row[1])!==input.expectedGroup)throw new Error('มิเตอร์มีการเปลี่ยนกลุ่มเสาแล้ว กรุณาปิดแล้วเปิดหน้าจัดกลุ่มใหม่');
+  const groups=new Map(groupRows.map(row=>[String(row[0]),String(row[1])]));if(rows.filter(row=>!row[53]&&groups.get(String(row[0]))===input.expectedGroup).length<2)throw new Error('มิเตอร์นี้อยู่เสาเดี่ยวแล้ว');
+  const group=previous?String(previous[3]):Utilities.getUuid(),now=storedDateToBE_(new Date().toISOString()),audit=mapWorkSheet_('PatrolPoleUnlinks',PATROL_POLE_UNLINK_HEADERS_,true),auditRow=auditIndex<0?audit.getLastRow()+1:auditIndex+2;
+  audit.getRange(auditRow,1,1,PATROL_POLE_UNLINK_HEADERS_.length).setValues([[input.requestId,input.recordId,input.expectedGroup,group,actor,now,'กำลังบันทึก'].map(mapWorkSafe_)]);SpreadsheetApp.flush();
+  try{ledger.getRange(current.index+2,1,1,PATROL_POLE_HEADERS_.length).setValues([[input.recordId,group,email,now].map(mapWorkSafe_)]);SpreadsheetApp.flush();audit.getRange(auditRow,7).setValue('สำเร็จ');SpreadsheetApp.flush();}
+  catch(error){let restored=true;try{ledger.getRange(current.index+2,1,1,PATROL_POLE_HEADERS_.length).setValues([current.row.map(mapWorkSafe_)]);SpreadsheetApp.flush();}catch(ignore){restored=false;}try{audit.getRange(auditRow,7).setValue(restored?'ย้อนกลับแล้ว':'ไม่ครบ');}catch(ignore){}throw new Error(restored?'แยกมิเตอร์ไม่สำเร็จ คืนกลุ่มเดิมแล้ว: '+error.message:'ยังยืนยันกลุ่มเสาไม่ได้ กรุณาโหลดรายการล่าสุด: '+error.message);}
+  return {id:input.recordId,patrolPoleGroup:group};
+ }finally{lock.releaseLock();}
+}
 const WORK_COORDINATE_HEADERS_=['Request ID','Fingerprint','Moves','ผู้แก้ไข','บันทึกเมื่อ','สถานะ'];
 function validatedWorkCoordinates_(input){
  if(!input||typeof input.requestId!=='string'||!/^[A-Za-z0-9-]{16,80}$/.test(input.requestId)||!Array.isArray(input.moves)||!input.moves.length||input.moves.length>100)throw new Error('เลือกแก้พิกัดได้ครั้งละ 1–100 งาน');
