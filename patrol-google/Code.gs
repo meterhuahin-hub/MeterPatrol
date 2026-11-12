@@ -142,6 +142,32 @@ function linkPatrolPoleMembers(input,token){
   return patrolPoleLinkReceipt_(clean,group);
  }finally{lock.releaseLock();}
 }
+const WORK_COORDINATE_HEADERS_=['Request ID','Fingerprint','Moves','ผู้แก้ไข','บันทึกเมื่อ','สถานะ'];
+function validatedWorkCoordinates_(input){
+ if(!input||typeof input.requestId!=='string'||!/^[A-Za-z0-9-]{16,80}$/.test(input.requestId)||!Array.isArray(input.moves)||!input.moves.length||input.moves.length>100)throw new Error('เลือกแก้พิกัดได้ครั้งละ 1–100 งาน');
+ const ids=new Set(),valid=(value,max)=>typeof value==='number'&&Number.isFinite(value)&&Math.abs(value)<=max;
+ const moves=input.moves.map(move=>{if(!move||typeof move.recordId!=='string'||!move.recordId||move.recordId.length>100||ids.has(move.recordId)||typeof move.expectedGroup!=='string'||move.expectedGroup.length>80||!valid(move.latitude,90)||!valid(move.longitude,180)||!valid(move.expectedLatitude,90)||!valid(move.expectedLongitude,180))throw new Error('พิกัดหรือรหัสงานไม่ถูกต้อง');ids.add(move.recordId);return {recordId:move.recordId,expectedGroup:move.expectedGroup,expectedLatitude:move.expectedLatitude,expectedLongitude:move.expectedLongitude,latitude:move.latitude,longitude:move.longitude};});
+ return {requestId:input.requestId,moves:moves.sort((a,b)=>a.recordId.localeCompare(b.recordId))};
+}
+function saveWorkCoordinates(input,token){
+ const account=accountSession_(token),email=googleUser_(),clean=validatedWorkCoordinates_(input),actor=String(account.di||'')+' • '+email,fingerprint=Utilities.base64Encode(Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256,JSON.stringify(clean.moves))),lock=LockService.getScriptLock();lock.waitLock(30000);
+ try{
+  const data=sheet_(),rows=data.getLastRow()>1?data.getRange(2,1,data.getLastRow()-1,58).getValues():[],groups=patrolPoleGroups_(),active=rows.map((row,index)=>({row,index})).filter(item=>!item.row[53]),selected=new Map(clean.moves.map(move=>[move.recordId,move])),items=clean.moves.map(move=>{const matches=active.filter(item=>String(item.row[0])===move.recordId);if(matches.length!==1)throw new Error('ไม่พบงาน หรือรหัสงานซ้ำ กรุณาโหลดรายการล่าสุด');const item=matches[0],record=readRow_(item.row);if(!canAccessWork_(account,record))throw new Error('ไม่มีสิทธิ์แก้พิกัดงานนี้');if((groups.get(move.recordId)||'')!==move.expectedGroup)throw new Error('กลุ่มเสามีการแก้ไข กรุณาโหลดรายการล่าสุด');return {...item,move};});
+  for(const {move} of items)if(move.expectedGroup){for(const item of active){if(groups.get(String(item.row[0]))!==move.expectedGroup)continue;const member=selected.get(String(item.row[0]));if(!member||member.latitude!==move.latitude||member.longitude!==move.longitude)throw new Error('ต้องย้ายมิเตอร์ที่ผูกเสาเดียวกันทั้งกลุ่ม กรุณาโหลดรายการล่าสุด');}}
+  const auditRows=mapWorkRows_('WorkCoordinateEdits',WORK_COORDINATE_HEADERS_),index=auditRows.findIndex(row=>String(row[0])===clean.requestId),previous=index<0?null:auditRows[index],receipt={updates:clean.moves.map(move=>({id:move.recordId,latitude:move.latitude,longitude:move.longitude}))};
+  if(previous&&(String(previous[1])!==fingerprint||String(previous[3])!==actor))throw new Error('คำขอเดิมมีข้อมูลเปลี่ยน กรุณาลองใหม่');
+  if(previous&&String(previous[5])==='สำเร็จ')return {updates:items.map(item=>({id:item.move.recordId,latitude:Number(item.row[11]),longitude:Number(item.row[12])}))};
+  const atTarget=item=>String(item.row[11]).trim()!==''&&String(item.row[12]).trim()!==''&&Number(item.row[11])===item.move.latitude&&Number(item.row[12])===item.move.longitude;
+  for(const item of items){if(previous&&atTarget(item))continue;if(String(item.row[11]).trim()===''||String(item.row[12]).trim()===''||Number(item.row[11])!==item.move.expectedLatitude||Number(item.row[12])!==item.move.expectedLongitude)throw new Error('พิกัดงานมีการแก้ไขแล้ว กรุณายกเลิกตำแหน่งที่ลากและโหลดรายการล่าสุด');}
+  const audit=mapWorkSheet_('WorkCoordinateEdits',WORK_COORDINATE_HEADERS_,true),auditRow=index<0?audit.getLastRow()+1:index+2;
+  audit.getRange(auditRow,1,1,WORK_COORDINATE_HEADERS_.length).setValues([[clean.requestId,fingerprint,JSON.stringify(clean.moves),actor,storedDateToBE_(new Date().toISOString()),'กำลังบันทึก'].map(mapWorkSafe_)]);SpreadsheetApp.flush();
+  try{
+   for(const item of items)if(!atTarget(item))data.getRange(item.index+2,12,1,2).setValues([[item.move.latitude,item.move.longitude]]);
+   SpreadsheetApp.flush();audit.getRange(auditRow,6).setValue('สำเร็จ');SpreadsheetApp.flush();
+  }catch(error){let restored=true;try{for(const item of items)data.getRange(item.index+2,12,1,2).setValues([[item.row[11],item.row[12]]]);SpreadsheetApp.flush();}catch(ignore){restored=false;}try{audit.getRange(auditRow,6).setValue(restored?'ย้อนกลับแล้ว':'ไม่ครบ');}catch(ignore){}throw new Error(restored?'บันทึกพิกัดไม่สำเร็จ คืนข้อมูลเดิมแล้ว: '+error.message:'ยังยืนยันพิกัดไม่ได้ กรุณาโหลดรายการล่าสุด: '+error.message);}
+  return receipt;
+ }finally{lock.releaseLock();}
+}
 function listPatrol(token){
  const account=accountSession_(token);googleUser_();const lock=LockService.getScriptLock();lock.waitLock(30000);
  try{const sheet=sheet_();if(sheet.getLastRow()<2)return [];const deliveries=deliveryMap_(),transfers=transferMap_(),inspections=inspectionMap_(deliveries,transfers),poleGroups=patrolPoleGroups_();return sheet.getRange(2,1,sheet.getLastRow()-1,58).getValues().filter(row=>!row[53]).filter(row=>row.some(v=>v!==''&&v!==null)).map(readRow_).map(r=>{const delivery=deliveries.get(r.id);return Object.assign(r,{patrolPoleGroup:poleGroups.get(r.id)||'',delivery:delivery||null,inspection:inspections.get(r.id)||null,transfer:transfers.get(r.id)||null});}).filter(r=>canAccessWork_(account,r)).reverse();}
