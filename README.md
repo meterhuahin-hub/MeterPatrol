@@ -7,6 +7,9 @@
 ## เวอร์ชัน Google Apps Script (แบบฟอร์มมิเตอร์ทั่วไป)
 ดู [ขั้นตอนเผยแพร่และสิทธิ์ Google](apps-script/README.md) โค้ดอยู่ใน `apps-script/` ใช้ Google Sheets เก็บข้อมูล และเข้าผ่านบัญชี Google ไม่ต้อง deploy เว็บ Python ด้านล่าง
 
+## แอป Android
+ดาวน์โหลดไฟล์ APK และดูวิธีติดตั้งได้ที่ [แอป WBS และ Patrol สำหรับ Android](android/README.md) แอปเปิดเว็บ Apps Script เดิมผ่านเบราว์เซอร์และใช้ Google Sheets ชุดเดิม
+
 ## พัฒนาเว็บ Python ในเครื่อง
 Python 3.12 ขึ้นไป
 ```sh

@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">WBS และ Patrol</string>
+    <string name="app_title">งานปรับปรุง WBS และ Patrol</string>
+    <string name="app_description">สำรวจงาน ตรวจรับงาน และส่งมอบงาน</string>
+    <string name="open_system">เปิดระบบงาน</string>
+    <string name="other_browser">เลือกเบราว์เซอร์อื่น</string>
+    <string name="browser_help">เปิดผ่านเบราว์เซอร์เพื่อใช้บัญชี Google และขอสิทธิ์กล้องหรือพิกัดตามปกติ ใช้ข้อมูล Google Sheets ชุดเดิมและต้องเชื่อมต่ออินเทอร์เน็ต</string>
+    <string name="account_help">หากเข้าสู่ระบบไม่ได้ ให้ตรวจว่าบัญชี Google ในเบราว์เซอร์เป็นบัญชีที่ผู้ดูแลอนุญาต</string>
+    <string name="no_browser">ไม่พบเบราว์เซอร์สำหรับเปิดระบบ กรุณาติดตั้ง Chrome แล้วลองอีกครั้ง</string>
+    <string name="version">เวอร์ชัน 1.0.0 • Android 6.0 ขึ้นไป</string>
+    <color name="brand_purple">#60218A</color>
+</resources>
