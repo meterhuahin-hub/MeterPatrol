@@ -95,7 +95,7 @@ def main():
     parser.add_argument('--tool-cache', type=Path, default=ROOT / '.toolchain')
     parser.add_argument('--download-cache', type=Path)
     parser.add_argument('--signing-dir', type=Path, default=ROOT / '.signing')
-    parser.add_argument('--output', type=Path, default=ROOT / 'releases' / 'MeterPatrol-1.1.0.apk')
+    parser.add_argument('--output', type=Path, default=ROOT / 'releases' / 'MeterPatrol-1.2.0.apk')
     args = parser.parse_args()
     for executable in ['java', 'keytool']:
         if not shutil.which(executable):

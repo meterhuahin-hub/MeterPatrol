@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="th.meterhuahin.meterpatrol" android:versionCode="2" android:versionName="1.1.0">
+    package="th.meterhuahin.meterpatrol" android:versionCode="3" android:versionName="1.2.0">
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-feature android:name="android.hardware.camera.any" android:required="false" />
     <uses-feature android:name="android.hardware.camera.autofocus" android:required="false" />
@@ -21,6 +21,14 @@
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="meterpatrol" android:host="scan" />
+            </intent-filter>
+        </activity>
+        <activity android:name=".ScanReturnActivity" android:exported="true" android:theme="@android:style/Theme.NoDisplay">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="meterpatrol" android:host="resume" />
             </intent-filter>
         </activity>
     </application>

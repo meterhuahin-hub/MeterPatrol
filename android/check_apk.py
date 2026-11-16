@@ -7,7 +7,7 @@ import re
 import zipfile
 
 root = Path(__file__).resolve().parent
-apk = root / 'releases/MeterPatrol-1.1.0.apk'
+apk = root / 'releases/MeterPatrol-1.2.0.apk'
 report = json.loads(apk.with_suffix('.verification.json').read_text())
 source = (root / 'src/th/meterhuahin/meterpatrol/MainActivity.java').read_text()
 url = re.search(r'WEB_URL = "([^"]+)"', source).group(1)
@@ -37,6 +37,9 @@ with zipfile.ZipFile(apk) as package:
     assert b'Landroid/webkit/WebView;' not in dex
     assert b'Landroid/hardware/Camera;' in dex
     assert b'Lcom/google/zxing/MultiFormatReader;' in dex
+    assert b'Landroid/content/ClipboardManager;' not in dex
+    assert b'Lth/meterhuahin/meterpatrol/ScanReturnActivity;' in dex
+    assert b'nativePeaRequest' in dex and b'nativePeaValue' in dex
     assert 'assets/ZXING-LICENSE.txt' in package.namelist()
     assert not any(name.endswith('.so') for name in package.namelist()), 'APK must work across CPU architectures'
 print('PASS APK integrity, v1/v2/v3 signature report, launcher metadata, exact Apps Script URL, browser Custom Tabs and native ZXing camera scanner, original update certificate and no WebView/native libraries')

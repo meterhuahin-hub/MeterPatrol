@@ -2,8 +2,6 @@ package th.meterhuahin.meterpatrol;
 
 import android.Manifest;
 import android.app.Activity;
-import android.content.ClipData;
-import android.content.ClipboardManager;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
@@ -28,7 +26,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-/** Native rear-camera scanner. A user-confirmed result is copied before returning to the form. */
+/** Native rear-camera scanner. A user-confirmed result is submitted through the authenticated browser. */
 @SuppressWarnings("deprecation")
 public final class BarcodeScannerActivity extends Activity implements SurfaceHolder.Callback, Camera.PreviewCallback {
     private static final int CAMERA_PERMISSION = 41;
@@ -42,16 +40,22 @@ public final class BarcodeScannerActivity extends Activity implements SurfaceHol
     private boolean resumed, surfaceReady, askedPermission;
     private int generation, lastSeen;
     private long lastFrame;
-    private String result, lastValue = "";
+    private String result, lastValue = "", requestId = "";
+    private boolean sending;
 
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
+        if (getIntent().hasExtra("completedRequest")) { finish(); return; }
         Uri data = getIntent().getData();
         if (data != null && (!"meterpatrol".equals(data.getScheme()) || !"scan".equals(data.getHost())
                 || data.getQueryParameter("request") == null
                 || !data.getQueryParameter("request").matches("[A-Za-z0-9-]{16,80}"))) {
             finish();
             return;
+        }
+        if (data != null) {
+            requestId = data.getQueryParameter("request");
+            getSharedPreferences("native_scan", MODE_PRIVATE).edit().putString("activeRequest", requestId).apply();
         }
         if (state != null) {
             result = state.getString("confirmedCandidate");
@@ -110,12 +114,10 @@ public final class BarcodeScannerActivity extends Activity implements SurfaceHol
         number.setGravity(android.view.Gravity.CENTER);
         number.setTextIsSelectable(true);
         root.addView(number);
-        use = button(root, "ใช้เลขนี้และกลับไปวางในช่อง PEA", new View.OnClickListener() {
+        use = button(root, "ใช้เลขนี้และส่งกลับช่อง PEA", new View.OnClickListener() {
             @Override public void onClick(View view) {
                 if (result == null) return;
-                ClipboardManager clipboard = (ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
-                clipboard.setPrimaryClip(ClipData.newPlainText("MeterPatrol PEA", result));
-                finish();
+                sendResult();
             }
         });
         use.setVisibility(View.GONE);
@@ -235,7 +237,50 @@ public final class BarcodeScannerActivity extends Activity implements SurfaceHol
         permission.setVisibility(View.GONE);
         number.setText(value);
         use.setVisibility(View.VISIBLE);
-        status.setText("ตรวจหมายเลข PEA แล้วกดใช้เลขนี้ แอปจะคัดลอกเลขให้ กลับเว็บแล้วกดวางเลขที่สแกนลง PEA");
+        status.setText("ตรวจหมายเลข PEA แล้วกดใช้เลขนี้ ระบบจะส่งผลกลับเข้าฟอร์มเดิมโดยไม่ต้องคัดลอกหรือวาง");
+    }
+
+    @Override protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        if (!requestId.isEmpty() && requestId.equals(intent.getStringExtra("completedRequest"))) finish();
+    }
+
+    private void sendResult() {
+        if (sending || result == null) return;
+        if (requestId.isEmpty()) {
+            status.setText("กรุณาเปิดฟอร์ม WBS/Patrol แล้วกดสแกนข้างช่อง PEA เพื่อส่งเลขเข้าแบบอัตโนมัติ");
+            return;
+        }
+        sending = true;
+        Uri callback = Uri.parse(MainActivity.WEB_URL).buildUpon()
+            .appendQueryParameter("nativePeaRequest", requestId)
+            .appendQueryParameter("nativePeaValue", result).build();
+        Intent browser = new Intent(Intent.ACTION_VIEW, callback).addCategory(Intent.CATEGORY_BROWSABLE);
+        // Prefer the browser that opened this scanner so the same Google account handles the callback.
+        Uri referrer = getReferrer();
+        java.util.List<android.content.pm.ResolveInfo> providers = getPackageManager().queryIntentServices(
+            new Intent("android.support.customtabs.action.CustomTabsService"), 0);
+        String provider = null;
+        for (android.content.pm.ResolveInfo entry : providers) {
+            if (entry.serviceInfo != null && "com.android.chrome".equals(entry.serviceInfo.packageName)) provider = entry.serviceInfo.packageName;
+        }
+        for (android.content.pm.ResolveInfo entry : providers) {
+            if (entry.serviceInfo != null && referrer != null && "android-app".equals(referrer.getScheme())
+                    && entry.serviceInfo.packageName.equals(referrer.getHost())) provider = entry.serviceInfo.packageName;
+        }
+        if (provider != null) {
+            browser.setPackage(provider);
+            Bundle options = new Bundle();
+            options.putBinder("android.support.customtabs.extra.SESSION", null);
+            browser.putExtras(options);
+            browser.putExtra("android.support.customtabs.extra.TOOLBAR_COLOR", Color.rgb(96,33,138));
+        }
+        try {
+            startActivity(browser);
+            status.setText("ส่งผลผ่านบัญชี Google เดิมแล้ว หากไม่กลับอัตโนมัติ กดกลับหน้าบันทึกงานบนหน้ารับผล");
+        } catch (android.content.ActivityNotFoundException | SecurityException unavailable) {
+            status.setText("เปิดหน้าส่งผลไม่ได้ กรุณาตรวจว่ามีเบราว์เซอร์ที่ใช้เข้าสู่ระบบ แล้วลองส่งอีกครั้ง");
+        } finally { sending = false; }
     }
 
     private void closeCamera() {
