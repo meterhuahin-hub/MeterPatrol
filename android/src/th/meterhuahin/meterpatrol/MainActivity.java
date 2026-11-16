@@ -78,6 +78,9 @@ public final class MainActivity extends Activity {
         addButton(content, R.string.open_system, true, new View.OnClickListener() {
             @Override public void onClick(View view) { openSystem(); }
         });
+        addButton(content, R.string.native_scan, true, new View.OnClickListener() {
+            @Override public void onClick(View view) { startActivity(new Intent(MainActivity.this, BarcodeScannerActivity.class)); }
+        });
         addButton(content, R.string.other_browser, false, new View.OnClickListener() {
             @Override public void onClick(View view) { chooseBrowser(); }
         });

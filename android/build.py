@@ -12,6 +12,9 @@ import zipfile
 
 ROOT = Path(__file__).resolve().parent
 ARCHIVES = {
+    'zxing-core.jar': (
+        'https://repo.maven.apache.org/maven2/com/google/zxing/core/3.5.3/core-3.5.3.jar',
+        '8d8064c1636fdaef7189dd9055c7d59950a8940a12f2293956446ec3c109fd82'),
     'build-tools.zip': (
         'https://dl.google.com/android/repository/build-tools_r35_linux.zip',
         'bd3a4966912eb8b30ed0d00b0cda6b6543b949d5ffe00bea54c04c81e1561d88'),
@@ -67,7 +70,7 @@ def tools(cache, downloads):
     build_tools = cache / 'android-15'
     for name in ['aapt2', 'zipalign']:
         (build_tools / name).chmod(0o755)
-    return build_tools, cache / 'android-35' / 'android.jar', downloads / 'ecj.jar'
+    return build_tools, cache / 'android-35' / 'android.jar', downloads / 'ecj.jar', downloads / 'zxing-core.jar'
 
 
 def signing_key(directory):
@@ -92,14 +95,14 @@ def main():
     parser.add_argument('--tool-cache', type=Path, default=ROOT / '.toolchain')
     parser.add_argument('--download-cache', type=Path)
     parser.add_argument('--signing-dir', type=Path, default=ROOT / '.signing')
-    parser.add_argument('--output', type=Path, default=ROOT / 'releases' / 'MeterPatrol-1.0.0.apk')
+    parser.add_argument('--output', type=Path, default=ROOT / 'releases' / 'MeterPatrol-1.1.0.apk')
     args = parser.parse_args()
     for executable in ['java', 'keytool']:
         if not shutil.which(executable):
             parser.error(executable + ' is required (Java 21 recommended)')
     cache = args.tool_cache.resolve()
     downloads = (args.download_cache or cache / 'downloads').resolve()
-    build_tools, android_jar, compiler = tools(cache, downloads)
+    build_tools, android_jar, compiler, zxing = tools(cache, downloads)
     build = ROOT / '.build'
     if build.exists():
         shutil.rmtree(build)
@@ -112,15 +115,16 @@ def main():
         '-I', android_jar, '--java', build / 'generated', resources)
     sources = sorted((ROOT / 'src').rglob('*.java')) + sorted((build / 'generated').rglob('*.java'))
     run('java', '-jar', compiler, '-source', '1.8', '-target', '1.8', '-encoding', 'UTF-8',
-        '-proc:none', '-bootclasspath', android_jar, '-d', build / 'classes', *sources)
+        '-proc:none', '-bootclasspath', android_jar, '-classpath', zxing, '-d', build / 'classes', *sources)
     classes = build / 'classes.jar'
     with zipfile.ZipFile(classes, 'w', zipfile.ZIP_DEFLATED) as package:
         for path in sorted((build / 'classes').rglob('*.class')):
             package.write(path, path.relative_to(build / 'classes'))
     run('java', '-cp', build_tools / 'lib/d8.jar', 'com.android.tools.r8.D8', '--lib', android_jar,
-        '--min-api', '23', '--output', build / 'dex', classes)
+        '--min-api', '23', '--output', build / 'dex', classes, zxing)
     with zipfile.ZipFile(unsigned, 'a', zipfile.ZIP_DEFLATED) as package:
         package.write(build / 'dex/classes.dex', 'classes.dex')
+        package.write(ROOT / 'ZXING-LICENSE.txt', 'assets/ZXING-LICENSE.txt')
     aligned = build / 'aligned.apk'
     run(build_tools / 'zipalign', '-f', '4', unsigned, aligned)
     key, password = signing_key(args.signing_dir.resolve())
@@ -139,6 +143,7 @@ def main():
         'sha256': sha256(output),
         'signature_verification': verification.splitlines(),
         'android_metadata': metadata.splitlines(),
+        'manifest_xml': run(build_tools / 'aapt2', 'dump', 'xmltree', '--file', 'AndroidManifest.xml', output, capture=True).splitlines(),
         'device_testing': 'Not installed on a physical Android device; Google login requires an authorized account.',
     }
     output.with_suffix('.verification.json').write_text(json.dumps(report, ensure_ascii=False, indent=2) + '\n')

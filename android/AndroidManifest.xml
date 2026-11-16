@@ -1,6 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="th.meterhuahin.meterpatrol" android:versionCode="1" android:versionName="1.0.0">
+    package="th.meterhuahin.meterpatrol" android:versionCode="2" android:versionName="1.1.0">
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-feature android:name="android.hardware.camera.any" android:required="false" />
+    <uses-feature android:name="android.hardware.camera.autofocus" android:required="false" />
     <uses-sdk android:minSdkVersion="23" android:targetSdkVersion="35" />
     <queries>
         <intent><action android:name="android.support.customtabs.action.CustomTabsService" /></intent>
@@ -11,6 +14,14 @@
         android:theme="@style/AppTheme" android:supportsRtl="true" android:usesCleartextTraffic="false">
         <activity android:name=".MainActivity" android:exported="true" android:launchMode="singleTop">
             <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
+        </activity>
+        <activity android:name=".BarcodeScannerActivity" android:exported="true" android:screenOrientation="portrait">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="meterpatrol" android:host="scan" />
+            </intent-filter>
         </activity>
     </application>
 </manifest>
