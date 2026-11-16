@@ -23,6 +23,10 @@ https://script.google.com/macros/s/AKfycbx0xCXsuBr2B35QgKyBs-VTLJ9_6oZZqOTp8zbVx
 
 อัปเดตโค้ดเว็บใน Apps Script โดยใช้ deployment URL เดิมได้ตามปกติ ไม่ต้องติดตั้ง APK ใหม่ทุกครั้ง ไม่ต้องนำไฟล์ในโฟลเดอร์ Android ไปวางใน Apps Script
 
+## สแกนบาร์โค้ด PEA
+
+เมื่ออัปเดตเว็บตาม [คู่มือสแกน PEA](../patrol-google/README.md#สแกนบาร์โค้ด-pea-ในฟอร์ม-wbs--patrol-รวม-apk-android) แล้ว APK เดิมจะแสดงปุ่มสแกนข้างช่อง PEA ในฟอร์ม WBS/Patrol ใช้กล้องผ่าน Chrome ตรวจเลขที่อ่านได้ก่อนกดใช้หมายเลข ไม่ต้องติดตั้ง APK ใหม่
+
 ## สิ่งที่ตรวจแล้ว
 
 สร้าง APK สำเร็จ ตรวจ signature ด้วย Android apksigner ผ่าน v1/v2/v3 และตรวจ zip alignment, package/activity, Android SDK และ URL ที่ฝังในไฟล์แล้ว ผลและ SHA-256 อยู่ใน `releases/`:

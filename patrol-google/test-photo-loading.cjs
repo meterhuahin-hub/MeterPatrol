@@ -1,7 +1,7 @@
 const fs=require('fs'),vm=require('vm'),assert=require('assert/strict'),html=fs.readFileSync(__dirname+'/Index.html','utf8');
 const elements={operationOverlay:{hidden:true},appShell:{setAttribute(k,v){this[k]=v;}},operationDetail:{}},calls=[];
 const c=vm.createContext({loginToken:'test-token',document:{getElementById:id=>elements[id]},setTimeout,clearTimeout,showLogin:()=>{}});
-c.google={script:{get run(){let ok;const runner={withSuccessHandler(fn){ok=fn;return this;},withFailureHandler(){return this;},getWorkPhotos(...args){calls.push({method:'getWorkPhotos',args,ok});},getWorkPhotoThumbnails(...args){calls.push({method:'getWorkPhotoThumbnails',args,ok});},listPatrol(...args){calls.push({method:'listPatrol',args,ok});}};return runner;}}};
+c.google={script:{get run(){let ok;const runner={withSuccessHandler(fn){ok=fn;return this;},withFailureHandler(){return this;},getWorkPhotos(...args){calls.push({method:'getWorkPhotos',args,ok});},getWorkPhotoThumbnails(...args){calls.push({method:'getWorkPhotoThumbnails',args,ok});},listPatrol(...args){calls.push({method:'listPatrol',args,ok});}};return new Proxy(runner,{get:(target,name)=>name in target?target[name]:(...args)=>calls.push({method:name,args,ok})});}}};
 vm.runInContext(html.slice(html.indexOf('let pendingOperations='),html.indexOf('function syncPatrolJob(')),c);
 (async()=>{
  // Photo requests must leave the screen usable on a slow connection.
@@ -14,7 +14,7 @@ vm.runInContext(html.slice(html.indexOf('let pendingOperations='),html.indexOf('
  const thumbnails=c.rpc('getWorkPhotoThumbnails','record-1',['survey']);
  assert.equal(elements.operationOverlay.hidden,true,'thumbnail loading must not cover the screen');
  calls[1].ok({});await thumbnails;
- assert.ok(html.includes("!['getWorkPhotos','getWorkPhotoThumbnails','getReportMapPageImage','listElectricityOffices'].includes(method)"),'map images and offices do not cover the screen');
+ for(const method of ['getReportMapPageImage','listElectricityOffices','getPeaBarcodeDecoder']){const request=c.rpc(method);assert.equal(elements.operationOverlay.hidden,true,method+' must leave the screen usable');calls.at(-1).ok({});await request;}
  assert.equal((html.match(/rpc\('getReportMapPageImage'/g)||[]).length,1,'both map views share one image loader');
  assert.equal((html.match(/cachedReportMapImage\(/g)||[]).length,4,'report, field and pole editor maps use the stored image loader');
  assert.ok(!html.includes("text.textContent=point.label+(jobs.length?' ✓':'')"),'surveyed poles show green without a checkmark');
@@ -23,7 +23,7 @@ vm.runInContext(html.slice(html.indexOf('let pendingOperations='),html.indexOf('
  // Other requests keep the blocking overlay and it still closes.
  const list=c.rpc('listPatrol');
  assert.equal(elements.operationOverlay.hidden,false,'data requests keep the overlay');
- calls[2].ok([]);await list;
+ calls.at(-1).ok([]);await list;
  await new Promise(r=>setTimeout(r,160));
  assert.equal(elements.operationOverlay.hidden,true);
  // The longest side is limited on every photo page, so portrait phone photos are not oversized.
