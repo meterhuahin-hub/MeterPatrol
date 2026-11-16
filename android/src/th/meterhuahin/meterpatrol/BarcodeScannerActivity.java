@@ -26,7 +26,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-/** Native rear-camera scanner. A user-confirmed result is submitted through the authenticated browser. */
+/** Native rear-camera scanner. A twice-matched result is submitted automatically through the authenticated browser. */
 @SuppressWarnings("deprecation")
 public final class BarcodeScannerActivity extends Activity implements SurfaceHolder.Callback, Camera.PreviewCallback {
     private static final int CAMERA_PERMISSION = 41;
@@ -42,6 +42,7 @@ public final class BarcodeScannerActivity extends Activity implements SurfaceHol
     private long lastFrame;
     private String result, lastValue = "", requestId = "";
     private boolean sending;
+    private ScanCallbackTab callbackTab;
 
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
@@ -114,7 +115,7 @@ public final class BarcodeScannerActivity extends Activity implements SurfaceHol
         number.setGravity(android.view.Gravity.CENTER);
         number.setTextIsSelectable(true);
         root.addView(number);
-        use = button(root, "ใช้เลขนี้และส่งกลับช่อง PEA", new View.OnClickListener() {
+        use = button(root, "ส่งผลอีกครั้ง", new View.OnClickListener() {
             @Override public void onClick(View view) {
                 if (result == null) return;
                 sendResult();
@@ -130,6 +131,7 @@ public final class BarcodeScannerActivity extends Activity implements SurfaceHol
         });
         button(root, "สแกนใหม่", new View.OnClickListener() {
             @Override public void onClick(View view) {
+                if (result != null) { finish(); return; }
                 result = null; lastValue = ""; lastSeen = 0;
                 number.setText(""); use.setVisibility(View.GONE); preview.setVisibility(View.VISIBLE);
                 ensureCamera();
@@ -235,9 +237,10 @@ public final class BarcodeScannerActivity extends Activity implements SurfaceHol
         closeCamera();
         preview.setVisibility(View.GONE);
         permission.setVisibility(View.GONE);
-        number.setText(value);
-        use.setVisibility(View.VISIBLE);
-        status.setText("ตรวจหมายเลข PEA แล้วกดใช้เลขนี้ ระบบจะส่งผลกลับเข้าฟอร์มเดิมโดยไม่ต้องคัดลอกหรือวาง");
+        number.setText("");
+        use.setVisibility(View.GONE);
+        status.setText("กำลังเติมหมายเลข PEA ในฟอร์มเดิม…");
+        sendResult();
     }
 
     @Override protected void onNewIntent(Intent intent) {
@@ -255,7 +258,6 @@ public final class BarcodeScannerActivity extends Activity implements SurfaceHol
         Uri callback = Uri.parse(MainActivity.WEB_URL).buildUpon()
             .appendQueryParameter("nativePeaRequest", requestId)
             .appendQueryParameter("nativePeaValue", result).build();
-        Intent browser = new Intent(Intent.ACTION_VIEW, callback).addCategory(Intent.CATEGORY_BROWSABLE);
         // Prefer the browser that opened this scanner so the same Google account handles the callback.
         Uri referrer = getReferrer();
         java.util.List<android.content.pm.ResolveInfo> providers = getPackageManager().queryIntentServices(
@@ -268,19 +270,27 @@ public final class BarcodeScannerActivity extends Activity implements SurfaceHol
             if (entry.serviceInfo != null && referrer != null && "android-app".equals(referrer.getScheme())
                     && entry.serviceInfo.packageName.equals(referrer.getHost())) provider = entry.serviceInfo.packageName;
         }
-        if (provider != null) {
-            browser.setPackage(provider);
-            Bundle options = new Bundle();
-            options.putBinder("android.support.customtabs.extra.SESSION", null);
-            browser.putExtras(options);
-            browser.putExtra("android.support.customtabs.extra.TOOLBAR_COLOR", Color.rgb(96,33,138));
-        }
-        try {
-            startActivity(browser);
-            status.setText("ส่งผลผ่านบัญชี Google เดิมแล้ว หากไม่กลับอัตโนมัติ กดกลับหน้าบันทึกงานบนหน้ารับผล");
-        } catch (android.content.ActivityNotFoundException | SecurityException unavailable) {
-            status.setText("เปิดหน้าส่งผลไม่ได้ กรุณาตรวจว่ามีเบราว์เซอร์ที่ใช้เข้าสู่ระบบ แล้วลองส่งอีกครั้ง");
-        } finally { sending = false; }
+        if (callbackTab != null) callbackTab.close();
+        callbackTab = new ScanCallbackTab(this, provider, callback, new Runnable() {
+            @Override public void run() {
+                if (isFinishing()) return;
+                String active = getSharedPreferences("native_scan", MODE_PRIVATE).getString("activeRequest", "");
+                if (!requestId.equals(active)) return;
+                getSharedPreferences("native_scan", MODE_PRIVATE).edit().remove("activeRequest").apply();
+                Intent original = new Intent(BarcodeScannerActivity.this, BarcodeScannerActivity.class);
+                original.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_NO_ANIMATION);
+                original.putExtra("completedRequest", requestId);
+                startActivity(original);
+                overridePendingTransition(0, 0);
+            }
+        }, new Runnable() {
+            @Override public void run() {
+                sending = false;
+                status.setText("ส่งผลไม่ได้ กรุณาตรวจอินเทอร์เน็ตแล้วกดส่งผลอีกครั้ง");
+                use.setVisibility(View.VISIBLE);
+            }
+        });
+        callbackTab.open();
     }
 
     private void closeCamera() {
@@ -292,7 +302,7 @@ public final class BarcodeScannerActivity extends Activity implements SurfaceHol
     }
     @Override protected void onResume() { super.onResume(); resumed = true; if (preview != null) ensureCamera(); }
     @Override protected void onPause() { resumed = false; closeCamera(); super.onPause(); }
-    @Override protected void onDestroy() { closeCamera(); worker.shutdownNow(); super.onDestroy(); }
+    @Override protected void onDestroy() { closeCamera(); worker.shutdownNow(); if (callbackTab != null) callbackTab.close(); super.onDestroy(); }
     @Override protected void onSaveInstanceState(Bundle state) { super.onSaveInstanceState(state); state.putString("confirmedCandidate", result); state.putBoolean("askedPermission", askedPermission); }
     @Override public void surfaceCreated(SurfaceHolder holder) { surfaceReady = true; ensureCamera(); }
     @Override public void surfaceDestroyed(SurfaceHolder holder) { surfaceReady = false; closeCamera(); }

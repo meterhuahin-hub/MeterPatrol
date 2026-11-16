@@ -9,6 +9,6 @@
     <string name="browser_help">เปิดผ่านเบราว์เซอร์เพื่อใช้บัญชี Google และขอสิทธิ์กล้องหรือพิกัดตามปกติ ใช้ข้อมูล Google Sheets ชุดเดิมและต้องเชื่อมต่ออินเทอร์เน็ต</string>
     <string name="account_help">หากเข้าสู่ระบบไม่ได้ ให้ตรวจว่าบัญชี Google ในเบราว์เซอร์เป็นบัญชีที่ผู้ดูแลอนุญาต</string>
     <string name="no_browser">ไม่พบเบราว์เซอร์สำหรับเปิดระบบ กรุณาติดตั้ง Chrome แล้วลองอีกครั้ง</string>
-    <string name="version">เวอร์ชัน 1.2.0 • Android 6.0 ขึ้นไป</string>
+    <string name="version">เวอร์ชัน 1.3.0 • Android 6.0 ขึ้นไป</string>
     <color name="brand_purple">#60218A</color>
 </resources>

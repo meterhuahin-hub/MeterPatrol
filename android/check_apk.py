@@ -7,7 +7,7 @@ import re
 import zipfile
 
 root = Path(__file__).resolve().parent
-apk = root / 'releases/MeterPatrol-1.2.0.apk'
+apk = root / 'releases/MeterPatrol-1.3.0.apk'
 report = json.loads(apk.with_suffix('.verification.json').read_text())
 source = (root / 'src/th/meterhuahin/meterpatrol/MainActivity.java').read_text()
 url = re.search(r'WEB_URL = "([^"]+)"', source).group(1)
@@ -39,6 +39,9 @@ with zipfile.ZipFile(apk) as package:
     assert b'Lcom/google/zxing/MultiFormatReader;' in dex
     assert b'Landroid/content/ClipboardManager;' not in dex
     assert b'Lth/meterhuahin/meterpatrol/ScanReturnActivity;' in dex
+    assert b'Lth/meterhuahin/meterpatrol/ScanCallbackTab;' in dex
+    assert b'Landroid/support/customtabs/ICustomTabsCallback$Stub;' in dex
+    assert 'assets/ANDROIDX-NOTICE.txt' in package.namelist()
     assert b'nativePeaRequest' in dex and b'nativePeaValue' in dex
     assert 'assets/ZXING-LICENSE.txt' in package.namelist()
     assert not any(name.endswith('.so') for name in package.namelist()), 'APK must work across CPU architectures'

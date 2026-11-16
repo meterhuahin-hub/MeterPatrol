@@ -2,6 +2,7 @@
 """Build a signed universal APK with pinned Android tools; no Gradle or JDK compiler required."""
 import argparse
 import hashlib
+from io import BytesIO
 import json
 from pathlib import Path
 import secrets
@@ -12,6 +13,9 @@ import zipfile
 
 ROOT = Path(__file__).resolve().parent
 ARCHIVES = {
+    'androidx-browser.aar': (
+        'https://dl.google.com/dl/android/maven2/androidx/browser/browser/1.8.0/browser-1.8.0.aar',
+        '2d6167b33bf6a064c37501501543702349e850ac62c732d1efa4e71063675456'),
     'zxing-core.jar': (
         'https://repo.maven.apache.org/maven2/com/google/zxing/core/3.5.3/core-3.5.3.jar',
         '8d8064c1636fdaef7189dd9055c7d59950a8940a12f2293956446ec3c109fd82'),
@@ -67,10 +71,18 @@ def tools(cache, downloads):
                     if path.is_file() and mode & 0o111:
                         path.chmod(0o755)
             marker.write_text(digest + '\n')
+    # Only Android's public Custom Tabs AIDL IPC classes are needed, not the AndroidX UI stack.
+    ipc = cache / 'customtabs-ipc.jar'
+    with zipfile.ZipFile(downloads / 'androidx-browser.aar') as aar:
+        with zipfile.ZipFile(BytesIO(aar.read('classes.jar'))) as classes:
+            with zipfile.ZipFile(ipc, 'w', zipfile.ZIP_DEFLATED) as target:
+                for name in classes.namelist():
+                    if name.startswith('android/support/customtabs/') and '/trusted/' not in name and name.endswith('.class'):
+                        target.writestr(name, classes.read(name))
     build_tools = cache / 'android-15'
     for name in ['aapt2', 'zipalign']:
         (build_tools / name).chmod(0o755)
-    return build_tools, cache / 'android-35' / 'android.jar', downloads / 'ecj.jar', downloads / 'zxing-core.jar'
+    return build_tools, cache / 'android-35' / 'android.jar', downloads / 'ecj.jar', downloads / 'zxing-core.jar', ipc
 
 
 def signing_key(directory):
@@ -95,14 +107,14 @@ def main():
     parser.add_argument('--tool-cache', type=Path, default=ROOT / '.toolchain')
     parser.add_argument('--download-cache', type=Path)
     parser.add_argument('--signing-dir', type=Path, default=ROOT / '.signing')
-    parser.add_argument('--output', type=Path, default=ROOT / 'releases' / 'MeterPatrol-1.2.0.apk')
+    parser.add_argument('--output', type=Path, default=ROOT / 'releases' / 'MeterPatrol-1.3.0.apk')
     args = parser.parse_args()
     for executable in ['java', 'keytool']:
         if not shutil.which(executable):
             parser.error(executable + ' is required (Java 21 recommended)')
     cache = args.tool_cache.resolve()
     downloads = (args.download_cache or cache / 'downloads').resolve()
-    build_tools, android_jar, compiler, zxing = tools(cache, downloads)
+    build_tools, android_jar, compiler, zxing, ipc = tools(cache, downloads)
     build = ROOT / '.build'
     if build.exists():
         shutil.rmtree(build)
@@ -115,16 +127,17 @@ def main():
         '-I', android_jar, '--java', build / 'generated', resources)
     sources = sorted((ROOT / 'src').rglob('*.java')) + sorted((build / 'generated').rglob('*.java'))
     run('java', '-jar', compiler, '-source', '1.8', '-target', '1.8', '-encoding', 'UTF-8',
-        '-proc:none', '-bootclasspath', android_jar, '-classpath', zxing, '-d', build / 'classes', *sources)
+        '-proc:none', '-bootclasspath', android_jar, '-classpath', str(zxing) + ':' + str(ipc), '-d', build / 'classes', *sources)
     classes = build / 'classes.jar'
     with zipfile.ZipFile(classes, 'w', zipfile.ZIP_DEFLATED) as package:
         for path in sorted((build / 'classes').rglob('*.class')):
             package.write(path, path.relative_to(build / 'classes'))
     run('java', '-cp', build_tools / 'lib/d8.jar', 'com.android.tools.r8.D8', '--lib', android_jar,
-        '--min-api', '23', '--output', build / 'dex', classes, zxing)
+        '--min-api', '23', '--output', build / 'dex', classes, zxing, ipc)
     with zipfile.ZipFile(unsigned, 'a', zipfile.ZIP_DEFLATED) as package:
         package.write(build / 'dex/classes.dex', 'classes.dex')
         package.write(ROOT / 'ZXING-LICENSE.txt', 'assets/ZXING-LICENSE.txt')
+        package.write(ROOT / 'ANDROIDX-NOTICE.txt', 'assets/ANDROIDX-NOTICE.txt')
     aligned = build / 'aligned.apk'
     run(build_tools / 'zipalign', '-f', '4', unsigned, aligned)
     key, password = signing_key(args.signing_dir.resolve())

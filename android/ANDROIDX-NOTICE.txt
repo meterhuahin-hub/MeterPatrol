@@ -1,0 +1,8 @@
+AndroidX Browser 1.8.0 — public Custom Tabs AIDL interfaces
+Copyright The Android Open Source Project.
+Licensed under the Apache License, Version 2.0.
+Full license text: assets/ZXING-LICENSE.txt (Apache-2.0).
+
+Source artifact: https://dl.google.com/dl/android/maven2/androidx/browser/browser/1.8.0/browser-1.8.0.aar
+Sources: https://dl.google.com/dl/android/maven2/androidx/browser/browser/1.8.0/browser-1.8.0-sources.jar
+Only generated android.support.customtabs IPC interface classes are included.
