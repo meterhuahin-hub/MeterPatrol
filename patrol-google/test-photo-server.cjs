@@ -53,7 +53,7 @@ function setup(){
  // A complete DATA sheet is confirmed with one header read and no migration.
  const s=setup().c,full=vm.runInContext(`[...HEADERS_,'รูปปฏิบัติงาน 1','รูปปฏิบัติงาน 2','ดูรูปตรวจรับ 1','ดูรูปตรวจรับ 2','งาน Patrol','กฟฟ.','ข้อมูลการลบ','ที่อยู่','ชื่อผู้ใช้ไฟ','หมายเลขผู้ใช้ไฟ CA','ปีงบประมาณของงาน (พ.ศ.)']`,s);
  const fresh=vm.createContext({});vm.runInContext(code,fresh);
- const run=(headers,maxColumns=58)=>{let reads=0,writes=0;const sheet={getMaxColumns:()=>maxColumns,getLastRow:()=>1,insertColumnsAfter(){writes++;},setFrozenRows(){},getRange(r,col,rows,cols){reads++;const width=cols||1;return {getValues:()=>[headers.slice(col-1,col-1+width)],setValues(){writes++;},setNumberFormat(){}};}};fresh.SpreadsheetApp={openById:()=>({getSheetByName:()=>sheet})};assert.equal(fresh.sheet_(),sheet);return {reads,writes};};
+ const run=(headers,maxColumns=58)=>{let reads=0,writes=0;const sheet={getMaxColumns:()=>maxColumns,getLastRow:()=>1,insertColumnsAfter(){writes++;},setFrozenRows(){},getRange(r,col,rows,cols){reads++;const width=cols||1;return {getValues:()=>[headers.slice(col-1,col-1+width)],setValues(){writes++;},setNumberFormat(){}};}};vm.runInContext('requestDataBook_=null',fresh);fresh.SpreadsheetApp={openById:()=>({getSheetByName:()=>sheet})};assert.equal(fresh.sheet_(),sheet);return {reads,writes};};
  assert.deepEqual(run([...full]),{reads:1,writes:0},'complete sheet needs one read');
  const loose=[...full];loose[4]='  '+loose[4]+' ';assert.deepEqual(run(loose),{reads:1,writes:0},'spacing in a header is tolerated as before');
  // A sheet missing a later column still goes through the existing migration.
