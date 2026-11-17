@@ -261,6 +261,8 @@ function deliveryMap_(){
  });
  return map;
 }
+function deliveryDriveError_(error,email,action){const message=String(error&&error.message||error);if(!/access denied|permission|not authorized|authorization|forbidden|สิทธิ์|อนุญาต/i.test(message))return error;return new Error('PHOTO_DRIVE_ACCESS: บัญชี Google '+email+' ไม่สามารถ'+action+'ในโฟลเดอร์รูปส่งมอบได้ ให้ผู้ดูแลตรวจสิทธิ์ผู้แก้ไข (Editor) ของโฟลเดอร์ และการอนุญาต Google Drive ของบัญชีนี้');}
+function getDeliveryUploadHelp(token){accountSession_(token);const email=googleUser_(),folderId=String(PropertiesService.getScriptProperties().getProperty('PHOTO_FOLDER_ID')||'').trim();let authorizationUrl='';try{if(typeof ScriptApp!=='undefined'){const info=ScriptApp.getAuthorizationInfo(ScriptApp.AuthMode.FULL);if(info.getAuthorizationStatus()===ScriptApp.AuthorizationStatus.REQUIRED)authorizationUrl=info.getAuthorizationUrl();}}catch(ignore){}return {email,folderUrl:folderId?'https://drive.google.com/drive/folders/'+encodeURIComponent(folderId):'',authorizationUrl};}
 function completeContractorWork(input,requestId,token){
  const scopedAccount=accountSession_(token);
  const email=user_(token);
@@ -284,11 +286,11 @@ function completeContractorWork(input,requestId,token){
   }
   if(previous.some(row=>String(row[0])===input.recordId)&&(inspectionMap_().get(input.recordId)||{}).verdict!=='ไม่ผ่าน')throw new Error('งานนี้ส่งมอบแล้ว ส่งแก้ไขได้เฉพาะงานตรวจไม่ผ่าน');
   const folderId=PropertiesService.getScriptProperties().getProperty('PHOTO_FOLDER_ID');if(!folderId)throw new Error('ผู้ดูแลต้องตั้ง PHOTO_FOLDER_ID และแชร์โฟลเดอร์ให้ผู้รับจ้าง');
-  const folder=DriveApp.getFolderById(folderId),urls=[];
+  let folder;try{folder=DriveApp.getFolderById(folderId);}catch(error){throw deliveryDriveError_(error,email,'เปิดโฟลเดอร์');}const urls=[];
   const label=work.pea.replace(/[\\/:*?"<>|\x00-\x1f\x7f]/g,'_').slice(0,100);
   [photos.before,photos.after].forEach((image,i)=>{
    const blob=Utilities.newBlob(Utilities.base64Decode(image.split(',')[1]),'image/jpeg',label+'_ปฏิบัติ'+(i+1)+'_'+requestId+'.jpg');
-   const file=folder.createFile(blob);created.push(file);urls.push(file.getUrl());
+   try{const file=folder.createFile(blob);created.push(file);urls.push(file.getUrl());}catch(error){throw deliveryDriveError_(error,email,'เพิ่มรูปปฏิบัติงาน '+(i+1)+' ');}
   });
   const now=new Date().toISOString(),safe=v=>/^[=+\-@]/.test(String(v))?"'"+v:String(v);
   const values=[work.id,work.wbs,work.pea,email,now,urls[0],urls[1],requestId,fingerprint];
