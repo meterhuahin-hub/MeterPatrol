@@ -36,7 +36,7 @@ vm.runInContext(html.slice(html.indexOf('let pendingOperations='),html.indexOf('
  assert.ok(!html.includes('max/im.width'),'survey form no longer limits width only');
  assert.equal((html.match(/fitPhotoScale\(/g)||[]).length,4,'survey, delivery and inspection all use the helper');
  // Reports load on request and may be printed, so they must not wait for scrolling.
- assert.ok(html.includes('appendSavedPhotos(container,record.id,kind,urls,reportWorkPhotoLabel(kind),{eager:true})'),'report photos load immediately after the button');
+ assert.ok(html.includes('appendSavedPhotos(container,record.id,kind,urls,reportWorkPhotoLabel(kind),options)'),'report photos load immediately after the button');
  assert.ok(/async function signOut\(\)\{try\{await rpc\('logoutAccount'\);await clearPersistentPhotos\(\);/.test(html),'sign out clears photos stored on the device');
  console.log('PASS photo requests leave the screen usable, data requests keep the overlay, longest-side resize on all pages, eager report photos and device cache cleared on sign out');
 })().catch(e=>{console.error(e);process.exitCode=1;});
