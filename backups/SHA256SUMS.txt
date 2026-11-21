@@ -1,0 +1,2 @@
+938fb6cfe654a9ac8fbe3bf73b69a37bce12a26aefe8d2c855c797b06c8d6310  MeterPatrol-source-2026-11-21-9675481.zip
+f22f5e36a7164a58c4f08b71ae06515fde9b462c86bef035061497fb91e0964a  MeterPatrol-offline-backup-2026-11-21.zip
