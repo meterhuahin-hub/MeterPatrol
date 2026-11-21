@@ -456,10 +456,11 @@ function render(){
  <tr><th rowspan="3">เสาที่</th><th rowspan="3">PEA.</th><th rowspan="3">ขนาด/เฟส</th><th rowspan="3">เครื่อง</th><th class="oldHead" colspan="14">จำนวนพัสดุรื้อถอน (เก่า)</th><th class="newHead" colspan="13">จำนวนพัสดุปรับปรุง (ใหม่)</th><th rowspan="3">หมายเหตุ</th><th rowspan="3">รูปก่อน</th><th rowspan="3">รูปหลัง</th></tr>
  <tr><th colspan="7">น็อตและแหวน</th><th colspan="6">สายไฟ</th><th rowspan="2">ตู้</th><th colspan="7">น็อตและแหวน</th><th colspan="3">แป้นไม้</th><th colspan="2">สายไฟ</th><th rowspan="2">ตู้</th></tr>
  <tr>${['8&quot;','10&quot;','12&quot;','14&quot;','16&quot;','18&quot;','แหวน','สีฟ้า','สีดำ','2x6','2x10','25','50','8&quot;','10&quot;','12&quot;','14&quot;','16&quot;','18&quot;','แหวน','20','60','120','2x10','50'].map(x=>'<th>'+x+'</th>').join('')}</tr></thead><tbody>`;
- let lastTR=null;
- reportRecords.forEach((r,i)=>{const group=JSON.stringify([reportKey(r.wbs),reportKey(r.transformer)]);if(group!==lastTR){h+=`<tr class="trRow"><td colspan="34">WBS ${escHtml(reportKey(r.wbs)||'ไม่ระบุ WBS')} • TR ${escHtml(reportKey(r.transformer)||'ไม่ระบุ TR')}</td></tr>`;lastTR=group}h+='<tr>';cols.forEach((c,idx)=>{let v=r[c[0]];if(idx>=4)v=z(v);h+='<td>'+escHtml(v)+'</td>'});h+='<td class="note">'+escHtml(r.note)+'</td>';h+='<td class="photoCell">'+(r.before?`<button class="photoLink" onclick="showPhoto(${i},'before')">ดูรูป</button>`:'–')+'</td>';h+='<td class="photoCell">'+(r.after?`<button class="photoLink" onclick="showPhoto(${i},'after')">ดูรูป</button>`:'–')+'</td>';h+=`</tr>`});
+ let lastTR=null,lastPole=null;
+ reportRecords.forEach((r,i)=>{const group=JSON.stringify([reportKey(r.wbs),reportKey(r.transformer)]);if(group!==lastTR){h+=`<tr class="trRow"><td colspan="34">WBS ${escHtml(reportKey(r.wbs)||'ไม่ระบุ WBS')} • TR ${escHtml(reportKey(r.transformer)||'ไม่ระบุ TR')}</td></tr>`;lastTR=group;lastPole=null;}else if(!reportKey(r.pole)||reportKey(r.pole)!==lastPole){h+=wbsPoleSeparator(34);}lastPole=reportKey(r.pole);h+='<tr>';cols.forEach((c,idx)=>{let v=r[c[0]];if(idx>=4)v=z(v);h+='<td>'+escHtml(v)+'</td>'});h+='<td class="note">'+escHtml(r.note)+'</td>';h+='<td class="photoCell">'+(r.before?`<button class="photoLink" onclick="showPhoto(${i},'before')">ดูรูป</button>`:'–')+'</td>';h+='<td class="photoCell">'+(r.after?`<button class="photoLink" onclick="showPhoto(${i},'after')">ดูรูป</button>`:'–')+'</td>';h+=`</tr>`});
  h+='</tbody></table></div>';el.innerHTML=patrolReportPanel('wbs','ตารางสำรวจที่บันทึก • '+reportRecords.length+' งาน',h);
 }
+function wbsPoleSeparator(columns){return '<tr class="wbsPoleSeparator" aria-hidden="true"><td colspan="'+columns+'" bgcolor="#a6a6a6" style="background-color:#a6a6a6;height:22px;line-height:22px;padding:0;print-color-adjust:exact;-webkit-print-color-adjust:exact">&nbsp;</td></tr>';}
 function download(name,data,type){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([data],{type}));a.download=name;a.click();URL.revokeObjectURL(a.href)}
 function exportJSON(){download('patrol-survey-backup.json',JSON.stringify(reportRecords,null,2),'application/json')}
 function reportWorkPhotoUrls(record,kind){if(kind==='survey')return [record.before,record.after];const item=kind==='inspection'?record.inspection:record.delivery;return item?[item.photo1,item.photo2]:[];}
@@ -497,9 +498,9 @@ function exportCSV(){
  const n=v=>{v=Number(v)||0;return v?String(v):''};
  const cell=(v,cls='',attrs='')=>`<td class="${cls}" ${attrs}>${e(v)}</td>`;
  const keys=['pole','pea','phase','machine','old_bolt_8in','old_bolt_10in','old_bolt_12in','old_bolt_14in','old_bolt_16in','old_bolt_18in','old_bolt_แหวน','old_wire_สีฟ้า','old_wire_สีดำ','old_wire_2x6','old_wire_2x10','old_wire_25','old_wire_50','old_cab','new_bolt_8in','new_bolt_10in','new_bolt_12in','new_bolt_14in','new_bolt_16in','new_bolt_18in','new_bolt_แหวน','wood_20','wood_60','wood_120','new_wire_2x10','new_wire_50','new_cab','note'];
- let rows=''; let lastTR=null;
+ let rows=''; let lastTR=null,lastPole=null;
  reportRecords.forEach(r=>{
-   const group=JSON.stringify([reportKey(r.wbs),reportKey(r.transformer)]);if(group!==lastTR){rows+=`<tr><td class="tr" colspan="32">WBS ${e(reportKey(r.wbs)||'ไม่ระบุ WBS')} • TR ${e(reportKey(r.transformer)||'ไม่ระบุ TR')}</td></tr>`;lastTR=group}
+   const group=JSON.stringify([reportKey(r.wbs),reportKey(r.transformer)]);if(group!==lastTR){rows+=`<tr><td class="tr" colspan="32">WBS ${e(reportKey(r.wbs)||'ไม่ระบุ WBS')} • TR ${e(reportKey(r.transformer)||'ไม่ระบุ TR')}</td></tr>`;lastTR=group;lastPole=null;}else if(!reportKey(r.pole)||reportKey(r.pole)!==lastPole){rows+=wbsPoleSeparator(keys.length);}lastPole=reportKey(r.pole);
    rows+='<tr>'+keys.map((k,i)=>cell(i>=4&&i<=30?n(r[k]):r[k], i<4?'txt':'')).join('')+'</tr>';
  });
  const html=`<!doctype html><html><head><meta charset="utf-8"><style>
