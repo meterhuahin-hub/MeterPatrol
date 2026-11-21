@@ -460,7 +460,7 @@ function render(){
  reportRecords.forEach((r,i)=>{const group=JSON.stringify([reportKey(r.wbs),reportKey(r.transformer)]);if(group!==lastTR){h+=`<tr class="trRow"><td colspan="34">WBS ${escHtml(reportKey(r.wbs)||'ไม่ระบุ WBS')} • TR ${escHtml(reportKey(r.transformer)||'ไม่ระบุ TR')}</td></tr>`;lastTR=group;lastPole=null;}else if(!reportKey(r.pole)||reportKey(r.pole)!==lastPole){h+=wbsPoleSeparator(34);}lastPole=reportKey(r.pole);h+='<tr>';cols.forEach((c,idx)=>{let v=r[c[0]];if(idx>=4)v=z(v);h+='<td>'+escHtml(v)+'</td>'});h+='<td class="note">'+escHtml(r.note)+'</td>';h+='<td class="photoCell">'+(r.before?`<button class="photoLink" onclick="showPhoto(${i},'before')">ดูรูป</button>`:'–')+'</td>';h+='<td class="photoCell">'+(r.after?`<button class="photoLink" onclick="showPhoto(${i},'after')">ดูรูป</button>`:'–')+'</td>';h+=`</tr>`});
  h+='</tbody></table></div>';el.innerHTML=patrolReportPanel('wbs','ตารางสำรวจที่บันทึก • '+reportRecords.length+' งาน',h);
 }
-function wbsPoleSeparator(columns){return '<tr class="wbsPoleSeparator" aria-hidden="true">'+Array.from({length:columns},()=>'<td bgcolor="#a6a6a6" style="background-color:#a6a6a6;height:22px;line-height:22px;padding:0;print-color-adjust:exact;-webkit-print-color-adjust:exact"></td>').join('')+'</tr>';}
+function wbsPoleSeparator(columns){return '<tr class="wbsPoleSeparator" aria-hidden="true">'+Array.from({length:columns},(_,i)=>'<td bgcolor="#a6a6a6" style="background-color:#a6a6a6;height:22px;line-height:22px;padding:0;print-color-adjust:exact;-webkit-print-color-adjust:exact;'+(i?'border-left:none;':'')+(i<columns-1?'border-right:none;':'')+'"></td>').join('')+'</tr>';}
 
 function download(name,data,type){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([data],{type}));a.download=name;a.click();URL.revokeObjectURL(a.href)}
 function exportJSON(){download('patrol-survey-backup.json',JSON.stringify(reportRecords,null,2),'application/json')}
@@ -477,7 +477,7 @@ function patrolReportPoleSeparator(items,index,columns){
  if(!index)return '';
  const current=items[index],previous=items[index-1];
  if(current.patrolJob&&previous.patrolJob&&current.patrolPoleGroup&&current.patrolPoleGroup===previous.patrolPoleGroup)return '';
- return '<tr class="patrolPoleSeparator" aria-hidden="true" style="height:24px;mso-height-source:userset">'+Array.from({length:columns},()=>'<td bgcolor="#bfbfbf" style="background-color:#bfbfbf;height:24px;line-height:24px;padding:0">&nbsp;</td>').join('')+'</tr>';
+ return '<tr class="patrolPoleSeparator" aria-hidden="true" style="height:24px;mso-height-source:userset">'+Array.from({length:columns},(_,i)=>'<td bgcolor="#bfbfbf" style="background-color:#bfbfbf;height:24px;line-height:24px;padding:0;'+(i?'border-left:none;':'')+(i<columns-1?'border-right:none;':'')+'"></td>').join('')+'</tr>';
 }
 const PATROL_REPORT_PHOTO_COLUMNS=['survey','delivery','inspection'].flatMap(kind=>[0,1].map(slot=>({kind,slot})));
 function patrolReportPhotoCells(record,index,excel=false){
