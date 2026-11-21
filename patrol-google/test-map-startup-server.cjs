@@ -10,7 +10,7 @@ function setup(role){
  const scopeKey=(()=>{const s=c.reportMapScope_;return null;})();
  c.reportMapSheet_=()=>({getLastRow:()=>2,getRange:()=>({getValues:()=>c.mapRows})});
  c.mapSetPagesFromRows_=r=>r.map(x=>({pageId:x[1],url}));
- c.mapNavigation_=()=>({latlong:'',revision:''});
+ c.mapNavigation_=()=>({latlong:'',revision:''});c.mapStartNavigation_=()=>({latlong:'',revision:''});
  c.withSavedMainPoints_=(s,p)=>{counts.mainPoints++;return p;};
  c.photoDataFromUrl_=u=>{assert.equal(u,url);return 'data:image/jpeg;base64,AA==';};
  return {c,counts};
