@@ -13,7 +13,7 @@ const server=vm.createContext({HtmlService:{createTemplateFromFile:n=>({getRawCo
  assert.equal(await range.getAttribute('max'),'20','ordinary materials go to 20');const wire=page.locator('#newWire .numStepper').first();assert.equal(await wire.locator('input[type=range]').getAttribute('max'),'100','wire goes to 100');
  // Typing still works and moves the slider; a larger number extends it.
  await field.fill('3');assert.equal(await slider(),3);await field.fill('150');assert.equal(await num(),150);assert.equal(await slider(),150,'a typed value above the range extends it');await field.fill('2');assert.equal(await slider(),2);
- await page.evaluate(()=>{const t=document.querySelector('[aria-controls=oldBolts]');if(t.getAttribute('aria-expanded')!=='true')t.click();});const ring=page.locator('#oldBolts .numStepper input.num');assert.equal(await ring.count(),1);await ring.fill('7');assert.equal(await ring.inputValue(),'7');
+ await page.evaluate(()=>{const b=document.getElementById('oldMaterialsMenuBtn');if(b&&b.getAttribute('aria-expanded')!=='true')b.click();const t=document.querySelector('[aria-controls=oldBolts]');if(t.getAttribute('aria-expanded')!=='true')t.click();});await page.waitForTimeout(400);const ring=page.locator('#oldBolts .numStepper input.num');assert.equal(await ring.count(),1);await ring.fill('7');assert.equal(await ring.inputValue(),'7');
  // Values set by the app move the slider too.
  await page.evaluate(()=>resetForm());assert.equal(await num(),0);assert.equal(await slider(),0,'reset moves the slider');
  // Choosing size, pole and machine still fills the formula.
